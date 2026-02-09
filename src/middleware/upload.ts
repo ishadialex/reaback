@@ -1,58 +1,45 @@
 import multer from "multer";
-import path from "node:path";
-import crypto from "node:crypto";
+import { CloudinaryStorage } from "multer-storage-cloudinary";
+import { cloudinary } from "../config/cloudinary.js";
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, "uploads/");
-  },
-  filename: (_req, file, cb) => {
-    const uniqueSuffix = crypto.randomBytes(16).toString("hex");
-    cb(null, `${uniqueSuffix}${path.extname(file.originalname)}`);
-  },
+const profileStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: "alvarado/profiles",
+    allowed_formats: ["jpg", "jpeg", "png", "gif", "webp"],
+    transformation: [{ width: 400, height: 400, crop: "fill" }],
+  } as any,
+});
+
+const propertyStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: "alvarado/properties",
+    allowed_formats: ["jpg", "jpeg", "png", "gif", "webp"],
+    transformation: [{ width: 1200, height: 800, crop: "limit" }],
+  } as any,
+});
+
+const attachmentStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: "alvarado/attachments",
+    allowed_formats: ["jpg", "jpeg", "png", "gif", "webp", "pdf"],
+    resource_type: "auto",
+  } as any,
 });
 
 export const uploadSingle = multer({
-  storage,
+  storage: profileStorage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
-  fileFilter: (_req, file, cb) => {
-    const allowed = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-    if (allowed.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error("Only JPEG, PNG, GIF, and WebP images are allowed"));
-    }
-  },
 }).single("file");
 
 export const uploadMultiple = multer({
-  storage,
+  storage: propertyStorage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB per image
-  fileFilter: (_req, file, cb) => {
-    const allowed = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-    if (allowed.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error("Only JPEG, PNG, GIF, and WebP images are allowed"));
-    }
-  },
 }).array("images", 20);
 
 export const uploadAttachment = multer({
-  storage,
+  storage: attachmentStorage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
-  fileFilter: (_req, file, cb) => {
-    const allowed = [
-      "image/jpeg", "image/png", "image/gif", "image/webp",
-      "application/pdf",
-      "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "text/plain", "text/csv",
-    ];
-    if (allowed.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error("File type not allowed"));
-    }
-  },
 }).single("file");

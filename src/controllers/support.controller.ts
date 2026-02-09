@@ -333,7 +333,7 @@ export async function uploadAttachment(req: Request, res: Response) {
         name: file.originalname,
         size: file.size,
         type: file.mimetype,
-        url: `/uploads/${file.filename}`,
+        url: file.path,
         context: (req.body.context as string) || "support",
       },
     });

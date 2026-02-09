@@ -112,8 +112,8 @@ export async function uploadPhoto(req: Request, res: Response) {
       return error(res, "No file uploaded", 400);
     }
 
-    const baseUrl = `${req.protocol}://${req.get("host")}`;
-    const url = `${baseUrl}/uploads/${req.file.filename}`;
+    // Cloudinary returns the URL in req.file.path
+    const url = req.file.path;
 
     await prisma.user.update({
       where: { id: req.userId },

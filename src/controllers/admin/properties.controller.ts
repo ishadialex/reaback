@@ -120,8 +120,8 @@ export async function create(req: Request, res: Response) {
       return error(res, "Maximum 20 images allowed", 400);
     }
 
-    const baseUrl = `${req.protocol}://${req.get("host")}`;
-    const images = files.map((f) => `${baseUrl}/uploads/${f.filename}`);
+    // Cloudinary returns URLs in file.path
+    const images = files.map((f) => f.path);
     const data = parsePropertyBody(req.body);
 
     // Validate required fields
@@ -162,8 +162,8 @@ export async function update(req: Request, res: Response) {
       if (files.length > 20) {
         return error(res, "Maximum 20 images allowed", 400);
       }
-      const baseUrl = `${req.protocol}://${req.get("host")}`;
-      data.images = files.map((f) => `${baseUrl}/uploads/${f.filename}`);
+      // Cloudinary returns URLs in file.path
+      data.images = files.map((f) => f.path);
     }
 
     const property = await prisma.property.update({
