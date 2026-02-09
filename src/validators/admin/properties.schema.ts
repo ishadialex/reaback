@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const createPropertySchema = z.object({
   title: z.string().min(1).max(200),
-  images: z.array(z.string().url()).min(1).max(20),
+  images: z.array(z.string().min(1)).min(1).max(20),
   location: z.string().min(1).max(200),
   price: z.number().positive(),
   type: z.enum(["residential", "commercial", "land"]).default("residential"),

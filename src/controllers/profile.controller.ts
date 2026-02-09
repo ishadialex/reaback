@@ -112,7 +112,8 @@ export async function uploadPhoto(req: Request, res: Response) {
       return error(res, "No file uploaded", 400);
     }
 
-    const url = `/uploads/${req.file.filename}`;
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    const url = `${baseUrl}/uploads/${req.file.filename}`;
 
     await prisma.user.update({
       where: { id: req.userId },
