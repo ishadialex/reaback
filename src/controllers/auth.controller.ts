@@ -123,6 +123,7 @@ export async function login(req: Request, res: Response) {
         passwordHash: true,
         isActive: true,
         emailVerified: true,
+        profilePhoto: true,
       },
     });
 
@@ -271,6 +272,7 @@ export async function forceLogin(req: Request, res: Response) {
         passwordHash: true,
         isActive: true,
         emailVerified: true,
+        profilePhoto: true,
       },
     });
 
@@ -373,6 +375,7 @@ export async function verifyOtp(req: Request, res: Response) {
         emailVerified: true,
         phone: true,
         referralCode: true,
+        profilePhoto: true,
       },
     });
 
@@ -426,6 +429,7 @@ export async function verifyOtp(req: Request, res: Response) {
         lastName: user.lastName,
         phone: user.phone,
         referralCode: user.referralCode,
+        profilePhoto: user.profilePhoto,
         emailVerified: true,
       },
       accessToken,
