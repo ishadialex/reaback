@@ -30,6 +30,11 @@ app.use(
       // Allow configured frontend URL
       if (origin === env.FRONTEND_URL) return callback(null, true);
 
+      // Allow Vercel deployments (production + preview branches)
+      if (origin.endsWith(".vercel.app")) {
+        return callback(null, true);
+      }
+
       // Allow any ngrok URL for development
       if (origin.includes("ngrok-free.app") || origin.includes("ngrok.io") || origin.includes("ngrok-free.dev")) {
         return callback(null, true);
