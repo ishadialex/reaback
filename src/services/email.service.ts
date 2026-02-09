@@ -275,15 +275,23 @@ export async function sendPasswordResetEmail(
         .content {
           padding: 40px;
         }
-        .button {
+        .button-table {
+          margin: 20px auto;
+        }
+        .button-cell {
+          background: #667eea;
+          border-radius: 6px;
+          text-align: center;
+        }
+        .button-link {
           display: inline-block;
           background: #667eea;
-          color: white !important;
+          color: #ffffff !important;
           padding: 14px 32px;
           text-decoration: none;
           border-radius: 6px;
-          margin: 20px 0;
           font-weight: 600;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
         }
         .warning {
           background: #fff3cd;
@@ -321,9 +329,19 @@ export async function sendPasswordResetEmail(
           <p>Hello ${firstName},</p>
           <p>We received a request to reset your password for your Alvarado account. Click the button below to create a new password:</p>
 
-          <div style="text-align: center;">
-            <a href="${resetUrl}" class="button">Reset Your Password</a>
-          </div>
+          <table role="presentation" border="0" cellpadding="0" cellspacing="0" class="button-table" width="100%">
+            <tr>
+              <td align="center">
+                <table role="presentation" border="0" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td class="button-cell" style="border-radius: 6px; background: #667eea;">
+                      <a href="${resetUrl}" target="_blank" class="button-link" style="display: inline-block; padding: 14px 32px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 16px; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600;">Reset Your Password</a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
 
           <p style="color: #666; font-size: 14px;">Or copy and paste this link into your browser:</p>
           <div class="token-box">${resetUrl}</div>
