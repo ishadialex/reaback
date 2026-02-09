@@ -33,6 +33,7 @@ export async function getUserInvestments(req: Request, res: Response) {
         investmentDate: inv.createdAt,
         status: inv.status,
         investmentType: isProperty ? "individual" : "option",
+        expectedROI: inv.expectedROI,
         expectedReturn: Math.round(inv.amount * (inv.expectedROI / 100) * 100) / 100,
         monthlyReturn: Math.round(inv.amount * (inv.monthlyReturn / 100) * 100) / 100,
       };
