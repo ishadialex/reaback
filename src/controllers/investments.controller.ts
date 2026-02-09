@@ -112,13 +112,22 @@ export async function createPropertyInvestment(req: Request, res: Response) {
 
     const property = await prisma.property.findUnique({
       where: { id: propertyId, isActive: true },
+      include: {
+        userInvestments: {
+          where: { status: "active" },
+          select: { amount: true },
+        },
+      },
     });
 
     if (!property) {
       return error(res, "Property not found", 404);
     }
 
-    if (property.investmentStatus !== "available") {
+    // Compute current funding dynamically from active investments
+    const currentFunded = property.userInvestments.reduce((sum, inv) => sum + inv.amount, 0);
+
+    if (property.investmentStatus !== "available" || (currentFunded >= property.targetAmount && property.targetAmount > 0)) {
       return error(res, "Property is not available for investment", 400);
     }
 
@@ -131,7 +140,7 @@ export async function createPropertyInvestment(req: Request, res: Response) {
     }
 
     if (property.investmentType === "pooled") {
-      const remaining = property.targetAmount - property.currentFunded;
+      const remaining = property.targetAmount - currentFunded;
       if (numAmount > remaining) {
         return error(res, `Only $${remaining} remaining in this pool`, 400);
       }
@@ -167,7 +176,7 @@ export async function createPropertyInvestment(req: Request, res: Response) {
       return error(res, "Insufficient balance", 400);
     }
 
-    const newFunded = property.currentFunded + numAmount;
+    const newFunded = currentFunded + numAmount;
     const newStatus = newFunded >= property.targetAmount ? "fully-funded" : property.investmentStatus;
 
     const investment = await prisma.$transaction(async (tx) => {

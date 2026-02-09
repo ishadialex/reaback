@@ -71,10 +71,22 @@ export async function getAll(req: Request, res: Response) {
 
     const properties = await prisma.property.findMany({
       where,
+      include: {
+        userInvestments: {
+          where: { status: "active" },
+          select: { amount: true },
+        },
+      },
       orderBy: { createdAt: "desc" },
     });
 
-    return success(res, properties);
+    const mapped = properties.map((p) => {
+      const funded = p.userInvestments.reduce((sum, inv) => sum + inv.amount, 0);
+      const { userInvestments, ...rest } = p;
+      return { ...rest, currentFunded: funded, investorCount: userInvestments.length };
+    });
+
+    return success(res, mapped);
   } catch (err) {
     return error(res, "Failed to fetch properties", 500);
   }
@@ -103,7 +115,14 @@ export async function getOne(req: Request, res: Response) {
       return error(res, "Property not found", 404);
     }
 
-    return success(res, property);
+    const activeInvestments = property.userInvestments.filter((inv) => inv.status === "active");
+    const funded = activeInvestments.reduce((sum, inv) => sum + inv.amount, 0);
+
+    return success(res, {
+      ...property,
+      currentFunded: funded,
+      investorCount: activeInvestments.length,
+    });
   } catch (err) {
     return error(res, "Failed to fetch property", 500);
   }

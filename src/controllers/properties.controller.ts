@@ -2,6 +2,13 @@ import { Request, Response } from "express";
 import { prisma } from "../config/database.js";
 import { success, error } from "../utils/response.js";
 
+const investmentInclude = {
+  userInvestments: {
+    where: { status: "active" },
+    select: { amount: true },
+  },
+};
+
 export async function getProperties(req: Request, res: Response) {
   try {
     const { type, location, category, investmentType, status, search } = req.query;
@@ -38,6 +45,7 @@ export async function getProperties(req: Request, res: Response) {
 
     const properties = await prisma.property.findMany({
       where,
+      include: investmentInclude,
       orderBy: { createdAt: "desc" },
     });
 
@@ -53,6 +61,7 @@ export async function getProperty(req: Request, res: Response) {
 
     const property = await prisma.property.findUnique({
       where: { id, isActive: true },
+      include: investmentInclude,
     });
 
     if (!property) {
@@ -69,6 +78,7 @@ export async function getFeatured(req: Request, res: Response) {
   try {
     const properties = await prisma.property.findMany({
       where: { isActive: true, isFeatured: true },
+      include: investmentInclude,
       orderBy: { createdAt: "desc" },
       take: 4,
     });
@@ -81,6 +91,13 @@ export async function getFeatured(req: Request, res: Response) {
 
 // Maps DB property to frontend InvestmentProperty shape
 function mapProperty(p: any) {
+  const activeInvestments = p.userInvestments || [];
+  const currentFunded = activeInvestments.reduce((sum: number, inv: any) => sum + inv.amount, 0);
+  const investorCount = activeInvestments.length;
+  const status = currentFunded >= p.targetAmount && p.targetAmount > 0
+    ? "fully-funded"
+    : (p.investmentStatus || "available");
+
   return {
     id: p.id,
     title: p.title,
@@ -93,8 +110,8 @@ function mapProperty(p: any) {
     minInvestment: p.minInvestment,
     maxInvestment: p.maxInvestment,
     targetAmount: p.targetAmount,
-    currentFunded: p.currentFunded,
-    investorCount: p.investorCount,
+    currentFunded,
+    investorCount,
     expectedROI: p.expectedROI,
     monthlyReturn: p.monthlyReturn,
     duration: p.duration,
@@ -102,7 +119,7 @@ function mapProperty(p: any) {
     bathrooms: p.bathrooms,
     parking: p.parking,
     area: `${p.sqft} sqft`,
-    status: p.investmentStatus || "available",
+    status,
     features: p.features || [],
     riskLevel: p.riskLevel || "low",
     createdAt: p.createdAt,
