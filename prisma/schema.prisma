@@ -1,0 +1,355 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// ──────────────────────────────────────────────
+// Landing Page Content (Admin-managed)
+// ──────────────────────────────────────────────
+
+model TeamMember {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  name      String
+  role      String
+  image     String
+  instagram String?
+  order     Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Testimonial {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  designation String
+  content     String
+  image       String
+  star        Int      @default(5)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model InvestmentOption {
+  id              String           @id @default(auto()) @map("_id") @db.ObjectId
+  title           String
+  image           String
+  minInvestment   String
+  description     String
+  link            String
+  order           Int              @default(0)
+  isActive        Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  userInvestments UserInvestment[]
+}
+
+// ──────────────────────────────────────────────
+// Users & Auth
+// ──────────────────────────────────────────────
+
+model User {
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
+  email            String    @unique
+  passwordHash     String
+  firstName        String
+  lastName         String
+  phone            String    @default("")
+  dateOfBirth      String    @default("")
+  nationality      String    @default("")
+  address          String    @default("")
+  city             String    @default("")
+  state            String    @default("")
+  postalCode       String    @default("")
+  country          String    @default("")
+  profilePhoto     String?
+  bio              String    @default("")
+  occupation       String    @default("")
+  role             String    @default("user") // user | admin | superadmin
+  emailVerified    Boolean   @default(false)
+  twoFactorEnabled Boolean   @default(false)
+  twoFactorSecret  String?
+  backupCodes      String[]  @default([])
+  kycStatus        String    @default("none") // none | pending | verified | rejected
+  balance          Float     @default(0)
+  referralCode     String    @unique
+  referredById     String?   @db.ObjectId
+  referredBy       User?     @relation("Referrals", fields: [referredById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  referrals        User[]    @relation("Referrals")
+  isActive         Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  sessions        Session[]
+  settings        UserSettings?
+  tickets         SupportTicket[]
+  ticketMessages  TicketMessage[]
+  attachments     FileAttachment[]
+  sentTransfers   Transfer[]       @relation("SentTransfers")
+  receivedTransfers Transfer[]     @relation("ReceivedTransfers")
+  transactions    Transaction[]
+  investments     UserInvestment[]
+  notifications   Notification[]
+  referralsMade   Referral[]       @relation("ReferralsMade")
+  referralsReceived Referral[]     @relation("ReferralsReceived")
+  fundOperations  FundOperation[]
+}
+
+model Session {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String   @db.ObjectId
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token      String   @unique
+  device     String   @default("Unknown")
+  browser    String   @default("Unknown")
+  ipAddress  String   @default("")
+  location   String   @default("Unknown")
+  lastActive DateTime @default(now())
+  expiresAt  DateTime
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+}
+
+model Otp {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  email     String
+  code      String
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
+
+model PasswordReset {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
+
+// ──────────────────────────────────────────────
+// User Settings
+// ──────────────────────────────────────────────
+
+model UserSettings {
+  id                 String  @id @default(auto()) @map("_id") @db.ObjectId
+  userId             String  @unique @db.ObjectId
+  user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailNotifications Boolean @default(true)
+  pushNotifications  Boolean @default(true)
+  marketingEmails    Boolean @default(false)
+  loginAlerts        Boolean @default(true)
+  sessionTimeout     Int     @default(30) // minutes
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+// ──────────────────────────────────────────────
+// Support Tickets
+// ──────────────────────────────────────────────
+
+model SupportTicket {
+  id        String          @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String          @db.ObjectId
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject   String
+  category  String
+  priority  String          @default("medium") // low | medium | high | urgent
+  status    String          @default("open")   // open | in_progress | resolved | closed
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  messages  TicketMessage[]
+}
+
+model TicketMessage {
+  id          String           @id @default(auto()) @map("_id") @db.ObjectId
+  ticketId    String           @db.ObjectId
+  ticket      SupportTicket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  senderId    String           @db.ObjectId
+  sender      User             @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  senderType  String           @default("user") // user | admin
+  message     String
+  createdAt   DateTime         @default(now())
+  attachments FileAttachment[]
+}
+
+model FileAttachment {
+  id        String         @id @default(auto()) @map("_id") @db.ObjectId
+  messageId String?        @db.ObjectId
+  message   TicketMessage? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String         @db.ObjectId
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  size      Int
+  type      String
+  url       String
+  context   String         @default("support") // support | profile
+  createdAt DateTime       @default(now())
+}
+
+// ──────────────────────────────────────────────
+// Transfers & Transactions
+// ──────────────────────────────────────────────
+
+model Transfer {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  senderId       String    @db.ObjectId
+  sender         User      @relation("SentTransfers", fields: [senderId], references: [id], onDelete: Cascade)
+  recipientId    String?   @db.ObjectId
+  recipient      User?     @relation("ReceivedTransfers", fields: [recipientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  recipientEmail String
+  amount         Float
+  note           String    @default("")
+  status         String    @default("pending") // pending | completed | failed
+  createdAt      DateTime  @default(now())
+  completedAt    DateTime?
+}
+
+model Transaction {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String   @db.ObjectId
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String   // deposit | withdrawal | transfer_sent | transfer_received | investment
+  amount      Float
+  status      String   @default("pending") // pending | completed | failed
+  description String   @default("")
+  reference   String   @default("")
+  createdAt   DateTime @default(now())
+}
+
+// ──────────────────────────────────────────────
+// Investments (User's)
+// ──────────────────────────────────────────────
+
+model UserInvestment {
+  id                 String            @id @default(auto()) @map("_id") @db.ObjectId
+  userId             String            @db.ObjectId
+  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  investmentOptionId String?           @db.ObjectId
+  investmentOption   InvestmentOption? @relation(fields: [investmentOptionId], references: [id])
+  propertyId         String?           @db.ObjectId
+  property           Property?         @relation(fields: [propertyId], references: [id])
+  amount             Float
+  expectedROI        Float             @default(0)
+  monthlyReturn      Float             @default(0)
+  status             String            @default("active") // active | completed | cancelled
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+}
+
+// ──────────────────────────────────────────────
+// Properties
+// ──────────────────────────────────────────────
+
+model Property {
+  id               String           @id @default(auto()) @map("_id") @db.ObjectId
+  title            String
+  images           String[]         @default([])
+  location         String
+  price            Float            @default(0)
+  type             String           @default("residential") // residential | commercial | land
+  category         String           @default("arbitrage")   // arbitrage | mortgage | airbnb
+  investmentType   String           @default("individual")  // individual | pooled
+  minInvestment    Float            @default(0)
+  maxInvestment    Float            @default(0)
+  targetAmount     Float            @default(0)
+  currentFunded    Float            @default(0)
+  investorCount    Int              @default(0)
+  expectedROI      Float            @default(0)
+  monthlyReturn    Float            @default(0)
+  duration         Int              @default(12)
+  bedrooms         Int              @default(0)
+  bathrooms        Int              @default(0)
+  parking          Int              @default(0)
+  sqft             Int              @default(0)
+  description      String           @default("")
+  features         String[]         @default([])
+  investmentStatus String           @default("available") // available | fully-funded | coming-soon | closed
+  riskLevel        String           @default("low")        // low | medium | high
+  isActive         Boolean          @default(true)
+  isFeatured       Boolean          @default(false)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  userInvestments  UserInvestment[]
+}
+
+// ──────────────────────────────────────────────
+// Notifications
+// ──────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // system | transfer | investment | security | support
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// ──────────────────────────────────────────────
+// Referrals
+// ──────────────────────────────────────────────
+
+model Referral {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  referrerId     String   @db.ObjectId
+  referrer       User     @relation("ReferralsMade", fields: [referrerId], references: [id], onDelete: Cascade)
+  referredUserId String   @db.ObjectId
+  referredUser   User     @relation("ReferralsReceived", fields: [referredUserId], references: [id], onDelete: Cascade)
+  status         String   @default("pending") // pending | completed
+  reward         Float    @default(0)
+  createdAt      DateTime @default(now())
+}
+
+// ──────────────────────────────────────────────
+// Fund Deposits & Withdrawals
+// ──────────────────────────────────────────────
+
+model FundOperation {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String    @db.ObjectId
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        String    // deposit | withdrawal
+  method      String    // card | bank | crypto
+  amount      Float
+  fee         Float     @default(0)
+  status      String    @default("pending") // pending | processing | completed | failed
+  details     String    @default("{}") // JSON string for method-specific data
+  reference   String    @default("")
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+}
+
+// ──────────────────────────────────────────────
+// Payment Wallets (Admin-managed)
+// ──────────────────────────────────────────────
+
+model PaymentWallet {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  type          String   // bank | crypto
+  method        String   // For crypto: BTC | ETH | USDT | USDC, For bank: bank_transfer
+  name          String   // e.g., "Bitcoin Wallet", "Main Bank Account"
+  address       String   // Wallet address or account number
+  network       String   @default("") // For crypto: Bitcoin Network, ERC20, etc.
+  bankName      String   @default("") // For bank transfers
+  accountName   String   @default("") // For bank transfers
+  swiftCode     String   @default("") // For bank transfers
+  routingNumber String   @default("") // For bank transfers
+  instructions  String   @default("") // Additional instructions
+  qrCodeData    String   @default("") // QR code data for easy scanning
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
