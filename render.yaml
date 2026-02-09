@@ -1,10 +1,10 @@
 services:
   - type: web
     name: reaback
-    env: node
+    runtime: node
     plan: free
-    buildCommand: npm install && npm run build
-    startCommand: npm start
+    buildCommand: npm install && npx prisma generate
+    startCommand: npx tsx src/server.ts
     envVars:
       - key: NODE_ENV
         value: production
