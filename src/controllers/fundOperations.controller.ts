@@ -3,6 +3,51 @@ import crypto from "crypto";
 import { prisma } from "../config/database.js";
 import { success, error } from "../utils/response.js";
 import { notifyAdminManualDeposit, notifyAdminWithdrawal, notifyAdminPaymentReceipt } from "../services/notification.service.js";
+import { verify2FACode } from "./twoFactor.controller.js";
+
+/**
+ * Check withdrawal authorization status (2FA + KYC)
+ * GET /api/fund-operations/withdrawal-authorization
+ */
+export async function getWithdrawalAuthorizationStatus(req: Request, res: Response) {
+  try {
+    const userId = req.userId!;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        twoFactorEnabled: true,
+        kycStatus: true,
+      },
+    });
+
+    if (!user) {
+      return error(res, "User not found", 404);
+    }
+
+    const twoFactorEnabled = user.twoFactorEnabled;
+    const kycVerified = user.kycStatus === "verified";
+    const canWithdraw = twoFactorEnabled && kycVerified;
+
+    const reasons: string[] = [];
+    if (!twoFactorEnabled) {
+      reasons.push("Two-factor authentication must be enabled");
+    }
+    if (!kycVerified) {
+      reasons.push("KYC verification required");
+    }
+
+    return success(res, {
+      canWithdraw,
+      twoFactorEnabled,
+      kycVerified,
+      kycStatus: user.kycStatus,
+      reasons,
+    });
+  } catch (err) {
+    return error(res, "Failed to check authorization status", 500);
+  }
+}
 
 /**
  * Create a deposit request
@@ -82,21 +127,56 @@ export async function createDeposit(req: Request, res: Response) {
 export async function createWithdrawal(req: Request, res: Response) {
   try {
     const userId = req.userId!;
-    const { method, amount, details } = req.body;
+    const { method, amount, details, twoFactorCode } = req.body;
 
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
       return error(res, "Invalid withdrawal amount", 400);
     }
 
-    // Check user exists
+    // Check user exists and get security status
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { firstName: true, lastName: true, email: true },
+      select: {
+        firstName: true,
+        lastName: true,
+        email: true,
+        twoFactorEnabled: true,
+        twoFactorSecret: true,
+        kycStatus: true,
+      },
     });
 
     if (!user) {
       return error(res, "User not found", 404);
+    }
+
+    // Check if 2FA is enabled
+    if (!user.twoFactorEnabled || !user.twoFactorSecret) {
+      return error(
+        res,
+        "Two-factor authentication must be enabled to make withdrawals. Please enable 2FA in security settings.",
+        403
+      );
+    }
+
+    // Check KYC verification status
+    if (user.kycStatus !== "verified") {
+      return error(
+        res,
+        "KYC verification is required to make withdrawals. Please complete KYC verification in settings.",
+        403
+      );
+    }
+
+    // Verify 2FA code
+    if (!twoFactorCode) {
+      return error(res, "2FA code is required for withdrawals", 400);
+    }
+
+    const is2FAValid = await verify2FACode(userId, twoFactorCode);
+    if (!is2FAValid) {
+      return error(res, "Invalid 2FA code. Please try again.", 401);
     }
 
     // Compute dynamic balance from transactions + completed fund operations
