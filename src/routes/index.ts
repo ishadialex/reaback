@@ -44,7 +44,7 @@ router.use("/transactions", transactionsRoutes);
 router.use("/investments", investmentsRoutes);
 router.use("/properties", propertiesRoutes);
 router.use("/notifications", notificationsRoutes);
-router.use("/referral", referralRoutes);
+router.use("/referrals", referralRoutes);
 router.use("/fund", fundRoutes);
 router.use("/payment-methods", paymentMethodsRoutes);
 router.use("/fund-operations", fundOperationsRoutes);
