@@ -10,7 +10,7 @@ import {
 } from "../utils/jwt.js";
 import { generateOtp, createOtp, verifyOtpCode } from "../utils/otp.js";
 import { sendOtpEmail, sendPasswordResetEmail } from "../services/email.service.js";
-import { sendLoginAlert } from "../services/notification.service.js";
+import { sendLoginAlert, sendReferralSuccessNotification } from "../services/notification.service.js";
 import { getLocationString } from "../services/geolocation.service.js";
 import { env } from "../config/env.js";
 
@@ -36,7 +36,7 @@ function parseUserAgent(ua: string | undefined): { device: string; browser: stri
 
 export async function register(req: Request, res: Response) {
   try {
-    const { email, password, firstName, lastName, phone } = req.body;
+    const { email, password, firstName, lastName, phone, referralCode: providedReferralCode } = req.body;
 
     // Normalize email to lowercase for case-insensitive lookups
     const normalizedEmail = email.toLowerCase().trim();
@@ -46,8 +46,21 @@ export async function register(req: Request, res: Response) {
       return error(res, "An account with this email already exists", 409);
     }
 
+    // Check if a referral code was provided and find the referrer
+    let referrer = null;
+    if (providedReferralCode) {
+      referrer = await prisma.user.findUnique({
+        where: { referralCode: providedReferralCode },
+        select: { id: true, email: true, firstName: true, lastName: true },
+      });
+
+      if (!referrer) {
+        return error(res, "Invalid referral code", 400);
+      }
+    }
+
     const passwordHash = await hashPassword(password);
-    const referralCode = generateReferralCode();
+    const userReferralCode = generateReferralCode();
 
     // Create user with emailVerified: false (will be set to true after OTP verification)
     const user = await prisma.user.create({
@@ -57,7 +70,8 @@ export async function register(req: Request, res: Response) {
         firstName,
         lastName,
         phone,
-        referralCode,
+        referralCode: userReferralCode,
+        referredById: referrer?.id || null,
         emailVerified: false, // Explicitly set to false
         settings: {
           create: {},
@@ -374,6 +388,7 @@ export async function verifyOtp(req: Request, res: Response) {
         phone: true,
         referralCode: true,
         profilePhoto: true,
+        referredById: true,
       },
     });
 
@@ -398,6 +413,81 @@ export async function verifyOtp(req: Request, res: Response) {
       where: { email: normalizedEmail },
       data: { emailVerified: true },
     });
+
+    // Process referral bonus if user was referred
+    if (user.referredById) {
+      const REFERRAL_BONUS = 10; // $10 bonus for both referrer and new user
+
+      try {
+        await prisma.$transaction(async (tx) => {
+          // Create referral record
+          await tx.referral.create({
+            data: {
+              referrerId: user.referredById!,
+              referredUserId: user.id,
+              status: "completed",
+              reward: REFERRAL_BONUS,
+            },
+          });
+
+          // Credit referrer bonus
+          await tx.user.update({
+            where: { id: user.referredById! },
+            data: { balance: { increment: REFERRAL_BONUS } },
+          });
+
+          // Create transaction for referrer
+          await tx.transaction.create({
+            data: {
+              userId: user.referredById!,
+              type: "referral",
+              amount: REFERRAL_BONUS,
+              status: "completed",
+              description: `Referral bonus for inviting ${user.firstName} ${user.lastName}`,
+            },
+          });
+
+          // Credit new user bonus
+          await tx.user.update({
+            where: { id: user.id },
+            data: { balance: { increment: REFERRAL_BONUS } },
+          });
+
+          // Create transaction for new user
+          await tx.transaction.create({
+            data: {
+              userId: user.id,
+              type: "referral",
+              amount: REFERRAL_BONUS,
+              status: "completed",
+              description: `Welcome bonus for joining via referral`,
+            },
+          });
+        });
+
+        console.log(`✅ Referral bonus credited: $${REFERRAL_BONUS} to both referrer and new user`);
+
+        // Send notification to referrer asynchronously
+        const referrer = await prisma.user.findUnique({
+          where: { id: user.referredById! },
+          select: { email: true },
+        });
+
+        if (referrer) {
+          setImmediate(() => {
+            sendReferralSuccessNotification(
+              user.referredById!,
+              referrer.email,
+              `${user.firstName} ${user.lastName}`,
+              REFERRAL_BONUS
+            ).catch((err) => console.error("Error sending referral notification:", err));
+          });
+        }
+      } catch (refErr) {
+        console.error("Error processing referral bonus:", refErr);
+        // Don't fail verification if referral bonus fails
+      }
+    }
 
     // Parse user agent for session tracking
     const { device, browser } = parseUserAgent(req.headers["user-agent"]);

@@ -1128,3 +1128,94 @@ export async function sendTransferFailedNotification(
     console.error("Error sending transfer failed notification:", error);
   }
 }
+
+/**
+ * Send notification when someone uses your referral code
+ */
+export async function sendReferralSuccessNotification(
+  referrerId: string,
+  referrerEmail: string,
+  newUserName: string,
+  bonus: number
+): Promise<void> {
+  try {
+    const referrer = await prisma.user.findUnique({
+      where: { id: referrerId },
+      select: { firstName: true },
+    });
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+          .bonus-box { background: #fff; padding: 20px; margin: 20px 0; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+          .amount { font-size: 42px; font-weight: bold; color: #8b5cf6; margin: 20px 0; }
+          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+          .btn { display: inline-block; background: #8b5cf6; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 10px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🎉 Referral Success!</h1>
+            <p>You've earned a referral bonus</p>
+          </div>
+          <div class="content">
+            <p>Hello ${referrer?.firstName || "User"},</p>
+            <p>Great news! <strong>${newUserName}</strong> just joined using your referral code, and you've earned a bonus!</p>
+
+            <div class="bonus-box">
+              <div class="amount">+$${bonus.toFixed(2)}</div>
+              <p style="color:#666;margin:10px 0">Referral Bonus</p>
+            </div>
+
+            <p style="text-align:center;color:#666">Keep sharing your referral code to earn more bonuses!</p>
+
+            <p style="text-align: center;">
+              <a href="${emailConfig.appUrl}/dashboard/referral" class="btn">
+                View Referral Dashboard
+              </a>
+            </p>
+          </div>
+          <div class="footer">
+            <p>&copy; ${new Date().getFullYear()} ${emailConfig.appName}. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    await sendEmailNotification(
+      referrerId,
+      {
+        to: referrerEmail,
+        subject: `🎉 You earned $${bonus.toFixed(2)} - Referral Bonus!`,
+        html,
+        text: `Hello ${referrer?.firstName || "User"},\n\nGreat news! ${newUserName} just joined using your referral code, and you've earned a $${bonus.toFixed(2)} bonus!\n\nKeep sharing your referral code to earn more bonuses!\n\nView your referral dashboard: ${emailConfig.appUrl}/dashboard/referral\n\n© ${new Date().getFullYear()} ${emailConfig.appName}. All rights reserved.`,
+      },
+      NotificationType.EMAIL
+    );
+
+    // Create in-app notification
+    await createInAppNotification(
+      referrerId,
+      "referral",
+      "Referral Bonus Earned!",
+      `${newUserName} joined using your code. You earned $${bonus.toFixed(2)}!`
+    );
+
+    // Send real-time Socket.IO notification
+    emitToUser(referrerId, "referral_success", {
+      newUserName,
+      bonus,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error sending referral success notification:", error);
+  }
+}
