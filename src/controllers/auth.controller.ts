@@ -230,12 +230,10 @@ export async function login(req: Request, res: Response) {
       },
     });
 
-    // Only send login alert for genuinely new/different devices
-    if (isNewDevice) {
-      setImmediate(() => {
-        sendLoginAlert(user.id, user.email, device, browser, location, ipAddress).catch(() => {});
-      });
-    }
+    // Send login alert for all successful logins
+    setImmediate(() => {
+      sendLoginAlert(user.id, user.email, device, browser, location, ipAddress).catch(() => {});
+    });
 
     const { passwordHash: _, ...userData } = user;
 

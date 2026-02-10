@@ -236,17 +236,27 @@ export async function sendLoginAlert(
         to: userEmail,
         subject: `🔐 New login to your ${emailConfig.appName} account`,
         html,
+        text: `Hello ${userName},\n\nWe detected a new login to your ${emailConfig.appName} account. If this was you, you can safely ignore this email.\n\nLogin Details:\nDevice: ${device}\nBrowser: ${browser}\nLocation: ${location}\nIP Address: ${ipAddress}\nTime: ${new Date().toLocaleString()}\n\nIf this wasn't you:\n- Change your password immediately\n- Enable two-factor authentication\n- Review your active sessions\n- Contact our support team\n\nView Active Sessions: ${emailConfig.appUrl}/dashboard/settings?tab=sessions\n\n© ${new Date().getFullYear()} ${emailConfig.appName}. All rights reserved.`,
       },
       NotificationType.LOGIN_ALERT
     );
 
-    // Also create in-app notification
+    // Create in-app notification
     await createInAppNotification(
       userId,
       "security",
       "New Login Detected",
       `New login from ${device} (${browser}) in ${location}`
     );
+
+    // Send real-time Socket.IO push notification
+    emitToUser(userId, "login_alert", {
+      device,
+      browser,
+      location,
+      ipAddress,
+      timestamp: new Date().toISOString(),
+    });
   } catch (error) {
     console.error("Error sending login alert:", error);
   }
