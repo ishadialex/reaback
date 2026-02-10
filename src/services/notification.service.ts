@@ -879,3 +879,240 @@ export async function sendTransactionNotification(
     console.error("Error sending transaction notification:", error);
   }
 }
+
+/**
+ * Send notification when user sends a transfer
+ */
+export async function sendTransferSentNotification(
+  userId: string,
+  userEmail: string,
+  recipientEmail: string,
+  amount: number,
+  newBalance: number,
+  transferId: string
+): Promise<void> {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { firstName: true },
+    });
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+          .transfer-box { background: #fff; padding: 20px; margin: 20px 0; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+          .amount { font-size: 32px; font-weight: bold; color: #ef4444; margin: 20px 0; text-align: center; }
+          .detail-row { padding: 10px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
+          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+          .btn { display: inline-block; background: #ef4444; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 10px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>💸 Transfer Sent</h1>
+            <p>Your money transfer was successful</p>
+          </div>
+          <div class="content">
+            <p>Hello ${user?.firstName || "User"},</p>
+            <p>You have successfully sent money to <strong>${recipientEmail}</strong>.</p>
+
+            <div class="transfer-box">
+              <div class="amount">-$${amount.toFixed(2)}</div>
+              <div class="detail-row">
+                <span>Recipient:</span>
+                <span><strong>${recipientEmail}</strong></span>
+              </div>
+              <div class="detail-row">
+                <span>Transfer ID:</span>
+                <span>${transferId}</span>
+              </div>
+              <div class="detail-row">
+                <span>Time:</span>
+                <span>${new Date().toLocaleString()}</span>
+              </div>
+              <div class="detail-row">
+                <span>New Balance:</span>
+                <span><strong>$${newBalance.toFixed(2)}</strong></span>
+              </div>
+            </div>
+
+            <p style="text-align: center;">
+              <a href="${emailConfig.appUrl}/dashboard/transfers" class="btn">
+                View Transfer History
+              </a>
+            </p>
+          </div>
+          <div class="footer">
+            <p>&copy; ${new Date().getFullYear()} ${emailConfig.appName}. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    await sendEmailNotification(
+      userId,
+      {
+        to: userEmail,
+        subject: `💸 Transfer Sent - $${amount.toFixed(2)}`,
+        html,
+      },
+      NotificationType.EMAIL
+    );
+
+    // Create in-app notification
+    await createInAppNotification(
+      userId,
+      "transfer",
+      "Transfer Sent",
+      `$${amount.toFixed(2)} sent to ${recipientEmail}`
+    );
+  } catch (error) {
+    console.error("Error sending transfer sent notification:", error);
+  }
+}
+
+/**
+ * Send notification when user receives a transfer
+ */
+export async function sendTransferReceivedNotification(
+  userId: string,
+  userEmail: string,
+  senderEmail: string,
+  amount: number,
+  newBalance: number,
+  transferId: string
+): Promise<void> {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { firstName: true },
+    });
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+          .transfer-box { background: #fff; padding: 20px; margin: 20px 0; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+          .amount { font-size: 32px; font-weight: bold; color: #10b981; margin: 20px 0; text-align: center; }
+          .detail-row { padding: 10px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
+          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+          .btn { display: inline-block; background: #10b981; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 10px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>💰 Money Received</h1>
+            <p>You've received a transfer</p>
+          </div>
+          <div class="content">
+            <p>Hello ${user?.firstName || "User"},</p>
+            <p>You have received money from <strong>${senderEmail}</strong>.</p>
+
+            <div class="transfer-box">
+              <div class="amount">+$${amount.toFixed(2)}</div>
+              <div class="detail-row">
+                <span>From:</span>
+                <span><strong>${senderEmail}</strong></span>
+              </div>
+              <div class="detail-row">
+                <span>Transfer ID:</span>
+                <span>${transferId}</span>
+              </div>
+              <div class="detail-row">
+                <span>Time:</span>
+                <span>${new Date().toLocaleString()}</span>
+              </div>
+              <div class="detail-row">
+                <span>New Balance:</span>
+                <span><strong>$${newBalance.toFixed(2)}</strong></span>
+              </div>
+            </div>
+
+            <p style="text-align: center;">
+              <a href="${emailConfig.appUrl}/dashboard/transfers" class="btn">
+                View Transfer Details
+              </a>
+            </p>
+          </div>
+          <div class="footer">
+            <p>&copy; ${new Date().getFullYear()} ${emailConfig.appName}. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    await sendEmailNotification(
+      userId,
+      {
+        to: userEmail,
+        subject: `💰 Money Received - $${amount.toFixed(2)}`,
+        html,
+      },
+      NotificationType.EMAIL
+    );
+
+    // Create in-app notification
+    await createInAppNotification(
+      userId,
+      "transfer",
+      "Money Received",
+      `$${amount.toFixed(2)} received from ${senderEmail}`
+    );
+
+    // Send real-time Socket.IO notification
+    emitToUser(userId, "transfer_received", {
+      amount,
+      senderEmail,
+      newBalance,
+      transferId,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error sending transfer received notification:", error);
+  }
+}
+
+/**
+ * Send notification when transfer fails
+ */
+export async function sendTransferFailedNotification(
+  userId: string,
+  recipientEmail: string,
+  amount: number,
+  reason: string
+): Promise<void> {
+  try {
+    // Create in-app notification only (no email spam for failed transfers)
+    await createInAppNotification(
+      userId,
+      "transfer",
+      "Transfer Failed",
+      `Transfer of $${amount.toFixed(2)} to ${recipientEmail} failed: ${reason}`
+    );
+
+    // Send real-time Socket.IO notification
+    emitToUser(userId, "transfer_failed", {
+      amount,
+      recipientEmail,
+      reason,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error sending transfer failed notification:", error);
+  }
+}

@@ -2,6 +2,26 @@ import { Request, Response } from "express";
 import { prisma } from "../../config/database.js";
 import { success, error } from "../../utils/response.js";
 
+/**
+ * Validate investmentType and category combination
+ * Rule: Pooled can only be Airbnb, Individual can only be Mortgage
+ */
+function validateInvestmentTypeCategory(investmentType?: string, category?: string): string | null {
+  if (!investmentType || !category) {
+    return null; // Skip validation if either is missing
+  }
+
+  if (investmentType === "pooled" && category !== "airbnb") {
+    return "Pooled investments can only be Airbnb category";
+  }
+
+  if (investmentType === "individual" && category !== "mortgage") {
+    return "Individual investments can only be Mortgage category";
+  }
+
+  return null;
+}
+
 /** Parse form-data text fields into proper types for Prisma */
 function parsePropertyBody(body: any) {
   const data: any = {};
@@ -150,6 +170,12 @@ export async function create(req: Request, res: Response) {
       return error(res, "Missing required fields: title, location, price, minInvestment, maxInvestment, targetAmount, expectedROI, monthlyReturn, sqft, description", 400);
     }
 
+    // Validate investmentType and category combination
+    const validationError = validateInvestmentTypeCategory(data.investmentType, data.category);
+    if (validationError) {
+      return error(res, validationError, 400);
+    }
+
     const property = await prisma.property.create({
       data: { ...data, images },
     });
@@ -171,6 +197,14 @@ export async function update(req: Request, res: Response) {
     }
 
     const data = parsePropertyBody(req.body);
+
+    // Validate investmentType and category combination if either is being updated
+    const investmentType = data.investmentType || existing.investmentType;
+    const category = data.category || existing.category;
+    const validationError = validateInvestmentTypeCategory(investmentType, category);
+    if (validationError) {
+      return error(res, validationError, 400);
+    }
 
     // If new images uploaded, use them; otherwise keep existing
     const files = req.files as Express.Multer.File[] | undefined;

@@ -22,6 +22,10 @@ export async function getUserInvestments(req: Request, res: Response) {
     // Normalize to consistent shape
     const normalized = investments.map((inv) => {
       const isProperty = !!inv.propertyId;
+      const expectedReturn = Math.round(inv.amount * (inv.expectedROI / 100) * 100) / 100;
+      const monthlyReturn = Math.round(inv.amount * (inv.monthlyReturn / 100) * 100) / 100;
+      const expectedTotal = inv.amount + expectedReturn;
+
       return {
         id: inv.id,
         propertyId: inv.propertyId || inv.investmentOptionId,
@@ -34,8 +38,9 @@ export async function getUserInvestments(req: Request, res: Response) {
         status: inv.status,
         investmentType: isProperty ? "individual" : "option",
         expectedROI: inv.expectedROI,
-        expectedReturn: Math.round(inv.amount * (inv.expectedROI / 100) * 100) / 100,
-        monthlyReturn: Math.round(inv.amount * (inv.monthlyReturn / 100) * 100) / 100,
+        expectedReturn,
+        monthlyReturn,
+        expectedTotal,
       };
     });
 
