@@ -27,6 +27,10 @@ const envSchema = z.object({
   ADMIN_EMAIL: z.string().optional(),
   // IP Geolocation (optional - free tier: 50k requests/month without token)
   IPINFO_TOKEN: z.string().optional(),
+  // Google OAuth
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  GOOGLE_CALLBACK_URL: z.string().url().optional(),
 });
 
 export const env = envSchema.parse(process.env);

@@ -2,6 +2,7 @@ import { Router } from "express";
 import monitorRoutes from "./monitor.routes.js";
 import publicRoutes from "./public.routes.js";
 import authRoutes from "./auth.routes.js";
+import oauthRoutes from "./oauth.routes.js";
 import profileRoutes from "./profile.routes.js";
 import settingsRoutes from "./settings.routes.js";
 import sessionsRoutes from "./sessions.routes.js";
@@ -32,6 +33,7 @@ router.use("/public", publicRoutes);
 
 // Auth routes
 router.use("/auth", authRoutes);
+router.use("/auth", oauthRoutes);
 
 // User routes (JWT required)
 router.use("/profile", profileRoutes);

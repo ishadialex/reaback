@@ -1,0 +1,239 @@
+import { Request, Response } from "express";
+import { OAuth2Client } from "google-auth-library";
+import crypto from "node:crypto";
+import { prisma } from "../config/database.js";
+import { success, error } from "../utils/response.js";
+import { signAccessToken, signRefreshToken } from "../utils/jwt.js";
+import { env } from "../config/env.js";
+
+const googleClient = new OAuth2Client(
+  env.GOOGLE_CLIENT_ID,
+  env.GOOGLE_CLIENT_SECRET,
+  env.GOOGLE_CALLBACK_URL
+);
+
+function generateReferralCode(): string {
+  return crypto.randomBytes(4).toString("hex"); // 8 hex chars
+}
+
+/**
+ * Initiate Google OAuth flow
+ * Redirects user to Google's consent screen
+ */
+export async function googleLogin(req: Request, res: Response) {
+  try {
+    const { referralCode } = req.query;
+
+    // Store referral code in state parameter to preserve it through OAuth flow
+    const state = referralCode ? JSON.stringify({ referralCode }) : undefined;
+
+    const authorizeUrl = googleClient.generateAuthUrl({
+      access_type: "offline",
+      scope: [
+        "https://www.googleapis.com/auth/userinfo.profile",
+        "https://www.googleapis.com/auth/userinfo.email",
+      ],
+      state,
+    });
+
+    return res.redirect(authorizeUrl);
+  } catch (err) {
+    console.error("Google OAuth initiation error:", err);
+    return error(res, "Failed to initiate Google login", 500);
+  }
+}
+
+/**
+ * Handle Google OAuth callback
+ * Exchanges authorization code for tokens, creates or finds user, generates JWT
+ */
+export async function googleCallback(req: Request, res: Response) {
+  try {
+    const { code, state } = req.query;
+
+    if (!code || typeof code !== "string") {
+      return res.redirect(`${env.FRONTEND_URL}/signin?error=missing_code`);
+    }
+
+    // Extract referral code from state if present
+    let referralCode: string | undefined;
+    if (state && typeof state === "string") {
+      try {
+        const stateData = JSON.parse(state);
+        referralCode = stateData.referralCode;
+      } catch (e) {
+        console.log("Could not parse state parameter");
+      }
+    }
+
+    // Exchange authorization code for tokens
+    const { tokens } = await googleClient.getToken(code);
+    googleClient.setCredentials(tokens);
+
+    // Get user info from Google
+    const ticket = await googleClient.verifyIdToken({
+      idToken: tokens.id_token!,
+      audience: env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    if (!payload || !payload.email) {
+      return res.redirect(`${env.FRONTEND_URL}/signin?error=invalid_token`);
+    }
+
+    const googleId = payload.sub;
+    const email = payload.email.toLowerCase().trim();
+    const firstName = payload.given_name || "";
+    const lastName = payload.family_name || "";
+    const profilePhoto = payload.picture || null;
+    const emailVerified = payload.email_verified || false;
+
+    // Check if user exists by Google ID or email
+    let user = await prisma.user.findFirst({
+      where: {
+        OR: [{ googleId }, { email }],
+      },
+    });
+
+    if (user) {
+      // User exists - update Google ID if not set and link account
+      if (!user.googleId && user.authProvider === "local") {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            googleId,
+            authProvider: "google",
+            emailVerified: true,
+            profilePhoto: profilePhoto || user.profilePhoto,
+          },
+        });
+      } else if (user.googleId && user.googleId !== googleId) {
+        // Email exists but linked to different Google account
+        return res.redirect(
+          `${env.FRONTEND_URL}/signin?error=email_already_exists`
+        );
+      } else {
+        // Update last login and profile photo if changed
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            profilePhoto: profilePhoto || user.profilePhoto,
+            emailVerified: true,
+          },
+        });
+      }
+    } else {
+      // New user - create account
+      let referrer = null;
+      if (referralCode) {
+        referrer = await prisma.user.findUnique({
+          where: { referralCode },
+          select: { id: true, email: true, firstName: true, lastName: true },
+        });
+      }
+
+      const userReferralCode = generateReferralCode();
+
+      user = await prisma.user.create({
+        data: {
+          email,
+          googleId,
+          authProvider: "google",
+          firstName,
+          lastName,
+          profilePhoto,
+          emailVerified,
+          referralCode: userReferralCode,
+          referredById: referrer?.id || null,
+          settings: {
+            create: {},
+          },
+        },
+      });
+
+      // Process referral bonus if user was referred
+      if (referrer) {
+        const REFERRAL_BONUS = 10;
+
+        try {
+          await prisma.$transaction(async (tx) => {
+            // Create referral record
+            await tx.referral.create({
+              data: {
+                referrerId: referrer.id,
+                referredUserId: user!.id,
+                status: "completed",
+                reward: REFERRAL_BONUS,
+              },
+            });
+
+            // Credit referrer bonus
+            await tx.user.update({
+              where: { id: referrer.id },
+              data: { balance: { increment: REFERRAL_BONUS } },
+            });
+
+            // Create transaction for referrer
+            await tx.transaction.create({
+              data: {
+                userId: referrer.id,
+                type: "referral",
+                amount: REFERRAL_BONUS,
+                status: "completed",
+                description: `Referral bonus for inviting ${firstName} ${lastName}`,
+              },
+            });
+
+            // Credit new user bonus
+            await tx.user.update({
+              where: { id: user!.id },
+              data: { balance: { increment: REFERRAL_BONUS } },
+            });
+
+            // Create transaction for new user
+            await tx.transaction.create({
+              data: {
+                userId: user!.id,
+                type: "referral",
+                amount: REFERRAL_BONUS,
+                status: "completed",
+                description: `Welcome bonus for joining via referral`,
+              },
+            });
+          });
+
+          console.log(`✅ Referral bonus credited: $${REFERRAL_BONUS} to both referrer and new user`);
+
+          // Send notifications asynchronously (import notification service functions if needed)
+          // Note: You may want to import and call sendReferralSuccessNotification and sendWelcomeBonusNotification here
+        } catch (refErr) {
+          console.error("Error processing referral bonus:", refErr);
+        }
+      }
+    }
+
+    // Generate JWT tokens
+    const accessToken = signAccessToken({ userId: user.id, email: user.email });
+    const refreshToken = signRefreshToken({ userId: user.id, email: user.email });
+
+    // Create session
+    await prisma.session.create({
+      data: {
+        userId: user.id,
+        token: refreshToken,
+        device: "Web",
+        browser: "Google OAuth",
+        ipAddress: req.ip || "",
+        location: "Unknown",
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+      },
+    });
+
+    // Redirect to frontend with tokens
+    const redirectUrl = `${env.FRONTEND_URL}/auth/callback?accessToken=${accessToken}&refreshToken=${refreshToken}`;
+    return res.redirect(redirectUrl);
+  } catch (err) {
+    console.error("Google OAuth callback error:", err);
+    return res.redirect(`${env.FRONTEND_URL}/signin?error=oauth_failed`);
+  }
+}
