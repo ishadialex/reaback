@@ -212,9 +212,23 @@ export async function googleCallback(req: Request, res: Response) {
       }
     }
 
-    // Generate JWT tokens
-    const accessToken = signAccessToken({ userId: user.id, email: user.email });
-    const refreshToken = signRefreshToken({ userId: user.id, email: user.email });
+    // Generate JWT tokens with profile data
+    const name = user.firstName && user.lastName
+      ? `${user.firstName} ${user.lastName}`
+      : user.firstName || user.lastName || undefined;
+
+    const accessToken = signAccessToken({
+      userId: user.id,
+      email: user.email,
+      name,
+      picture: user.profilePhoto || undefined
+    });
+    const refreshToken = signRefreshToken({
+      userId: user.id,
+      email: user.email,
+      name,
+      picture: user.profilePhoto || undefined
+    });
 
     // Create session
     await prisma.session.create({

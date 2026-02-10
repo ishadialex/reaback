@@ -4,6 +4,8 @@ import { env } from "../config/env.js";
 interface TokenPayload {
   userId: string;
   email: string;
+  name?: string;
+  picture?: string;
 }
 
 export function signAccessToken(payload: TokenPayload): string {

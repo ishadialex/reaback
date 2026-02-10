@@ -229,8 +229,23 @@ export async function login(req: Request, res: Response) {
       }
     }
 
-    const accessToken = signAccessToken({ userId: user.id, email: user.email });
-    const refreshToken = signRefreshToken({ userId: user.id, email: user.email });
+    // Generate tokens with user profile data
+    const name = user.firstName && user.lastName
+      ? `${user.firstName} ${user.lastName}`
+      : user.firstName || user.lastName || undefined;
+
+    const accessToken = signAccessToken({
+      userId: user.id,
+      email: user.email,
+      name,
+      picture: user.profilePhoto || undefined
+    });
+    const refreshToken = signRefreshToken({
+      userId: user.id,
+      email: user.email,
+      name,
+      picture: user.profilePhoto || undefined
+    });
 
     await prisma.session.create({
       data: {
@@ -332,9 +347,23 @@ export async function forceLogin(req: Request, res: Response) {
     const ipAddress = req.ip || "";
     const location = await getLocationString(ipAddress);
 
-    // Create new session
-    const accessToken = signAccessToken({ userId: user.id, email: user.email });
-    const refreshToken = signRefreshToken({ userId: user.id, email: user.email });
+    // Create new session with user profile data
+    const name = user.firstName && user.lastName
+      ? `${user.firstName} ${user.lastName}`
+      : user.firstName || user.lastName || undefined;
+
+    const accessToken = signAccessToken({
+      userId: user.id,
+      email: user.email,
+      name,
+      picture: user.profilePhoto || undefined
+    });
+    const refreshToken = signRefreshToken({
+      userId: user.id,
+      email: user.email,
+      name,
+      picture: user.profilePhoto || undefined
+    });
 
     await prisma.session.create({
       data: {
@@ -740,13 +769,27 @@ export async function refreshToken(req: Request, res: Response) {
       return error(res, "Session not found or has been revoked", 401);
     }
 
+    // Fetch current user profile data for token payload
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { firstName: true, lastName: true, profilePhoto: true },
+    });
+
+    const name = user?.firstName && user?.lastName
+      ? `${user.firstName} ${user.lastName}`
+      : user?.firstName || user?.lastName || undefined;
+
     const newAccessToken = signAccessToken({
       userId: payload.userId,
       email: payload.email,
+      name,
+      picture: user?.profilePhoto || undefined
     });
     const newRefreshToken = signRefreshToken({
       userId: payload.userId,
       email: payload.email,
+      name,
+      picture: user?.profilePhoto || undefined
     });
 
     await prisma.session.update({
