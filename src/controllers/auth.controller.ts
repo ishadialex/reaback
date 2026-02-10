@@ -10,7 +10,7 @@ import {
 } from "../utils/jwt.js";
 import { generateOtp, createOtp, verifyOtpCode } from "../utils/otp.js";
 import { sendOtpEmail, sendPasswordResetEmail } from "../services/email.service.js";
-import { sendLoginAlert, sendReferralSuccessNotification } from "../services/notification.service.js";
+import { sendLoginAlert, sendReferralSuccessNotification, sendWelcomeBonusNotification } from "../services/notification.service.js";
 import { getLocationString } from "../services/geolocation.service.js";
 import { env } from "../config/env.js";
 
@@ -467,13 +467,14 @@ export async function verifyOtp(req: Request, res: Response) {
 
         console.log(`✅ Referral bonus credited: $${REFERRAL_BONUS} to both referrer and new user`);
 
-        // Send notification to referrer asynchronously
+        // Send notifications to both referrer and new user asynchronously
         const referrer = await prisma.user.findUnique({
           where: { id: user.referredById! },
-          select: { email: true },
+          select: { email: true, firstName: true, lastName: true },
         });
 
         if (referrer) {
+          // Notify referrer about earning bonus
           setImmediate(() => {
             sendReferralSuccessNotification(
               user.referredById!,
@@ -481,6 +482,17 @@ export async function verifyOtp(req: Request, res: Response) {
               `${user.firstName} ${user.lastName}`,
               REFERRAL_BONUS
             ).catch((err) => console.error("Error sending referral notification:", err));
+          });
+
+          // Notify new user about receiving welcome bonus
+          setImmediate(() => {
+            sendWelcomeBonusNotification(
+              user.id,
+              user.email,
+              user.firstName,
+              `${referrer.firstName} ${referrer.lastName}`,
+              REFERRAL_BONUS
+            ).catch((err) => console.error("Error sending welcome bonus notification:", err));
           });
         }
       } catch (refErr) {

@@ -1219,3 +1219,87 @@ export async function sendReferralSuccessNotification(
     console.error("Error sending referral success notification:", error);
   }
 }
+
+export async function sendWelcomeBonusNotification(
+  newUserId: string,
+  newUserEmail: string,
+  newUserName: string,
+  referrerName: string,
+  bonus: number
+): Promise<void> {
+  try {
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+          .bonus-box { background: #fff; padding: 20px; margin: 20px 0; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
+          .amount { font-size: 42px; font-weight: bold; color: #8b5cf6; margin: 20px 0; }
+          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+          .btn { display: inline-block; background: #8b5cf6; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 10px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🎉 Welcome Bonus!</h1>
+            <p>You've received a signup bonus</p>
+          </div>
+          <div class="content">
+            <p>Hello ${newUserName},</p>
+            <p>Welcome to ${emailConfig.appName}! Since you joined via <strong>${referrerName}'s</strong> referral, you've received a welcome bonus!</p>
+
+            <div class="bonus-box">
+              <div class="amount">+$${bonus.toFixed(2)}</div>
+              <p style="color:#666;margin:10px 0">Welcome Bonus</p>
+            </div>
+
+            <p style="text-align:center;color:#666">Start investing today and grow your wealth with us!</p>
+
+            <p style="text-align: center;">
+              <a href="${emailConfig.appUrl}/dashboard" class="btn">
+                Go to Dashboard
+              </a>
+            </p>
+          </div>
+          <div class="footer">
+            <p>&copy; ${new Date().getFullYear()} ${emailConfig.appName}. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    await sendEmailNotification(
+      newUserId,
+      {
+        to: newUserEmail,
+        subject: `🎉 Welcome! You received $${bonus.toFixed(2)} bonus`,
+        html,
+        text: `Hello ${newUserName},\n\nWelcome to ${emailConfig.appName}! Since you joined via ${referrerName}'s referral, you've received a $${bonus.toFixed(2)} welcome bonus!\n\nStart investing today and grow your wealth with us!\n\nGo to Dashboard: ${emailConfig.appUrl}/dashboard\n\n© ${new Date().getFullYear()} ${emailConfig.appName}. All rights reserved.`,
+      },
+      NotificationType.EMAIL
+    );
+
+    // Create in-app notification
+    await createInAppNotification(
+      newUserId,
+      "referral",
+      "Welcome Bonus Received!",
+      `You received $${bonus.toFixed(2)} for joining via ${referrerName}'s referral. Start investing today!`
+    );
+
+    // Send real-time Socket.IO notification
+    emitToUser(newUserId, "welcome_bonus", {
+      referrerName,
+      bonus,
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Error sending welcome bonus notification:", error);
+  }
+}
