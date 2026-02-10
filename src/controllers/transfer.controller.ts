@@ -13,11 +13,44 @@ export async function getTransfers(req: Request, res: Response) {
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { balance: true },
     });
 
     if (!user) {
       return error(res, "User not found", 404);
+    }
+
+    // Compute dynamic balance from transactions + completed fund operations
+    const [transactions, completedFundOps] = await Promise.all([
+      prisma.transaction.findMany({
+        where: { userId, status: "completed" },
+        select: { type: true, amount: true },
+      }),
+      prisma.fundOperation.findMany({
+        where: { userId, status: { in: ["completed", "approved"] } },
+        select: { type: true, amount: true },
+      }),
+    ]);
+
+    let balance = 0;
+    for (const tx of transactions) {
+      switch (tx.type) {
+        case "deposit":
+        case "profit":
+        case "admin_bonus":
+        case "referral":
+        case "transfer_received":
+          balance += tx.amount;
+          break;
+        case "withdrawal":
+        case "investment":
+        case "transfer_sent":
+          balance -= Math.abs(tx.amount);
+          break;
+      }
+    }
+    for (const op of completedFundOps) {
+      if (op.type === "deposit") balance += op.amount;
+      else if (op.type === "withdrawal") balance -= op.amount;
     }
 
     const transfers = await prisma.transfer.findMany({
@@ -27,7 +60,7 @@ export async function getTransfers(req: Request, res: Response) {
       orderBy: { createdAt: "desc" },
     });
 
-    return success(res, { balance: user.balance, transfers });
+    return success(res, { balance, transfers });
   } catch (err) {
     return error(res, "Failed to fetch transfers", 500);
   }
@@ -81,7 +114,6 @@ export async function createTransfer(req: Request, res: Response) {
     const sender = await prisma.user.findUnique({
       where: { id: userId },
       select: {
-        balance: true,
         email: true,
         firstName: true,
         lastName: true,
@@ -123,7 +155,41 @@ export async function createTransfer(req: Request, res: Response) {
       return error(res, "Cannot transfer to yourself");
     }
 
-    if (sender.balance < amount) {
+    // Compute dynamic balance from transactions + completed fund operations
+    const [transactions, completedFundOps] = await Promise.all([
+      prisma.transaction.findMany({
+        where: { userId, status: "completed" },
+        select: { type: true, amount: true },
+      }),
+      prisma.fundOperation.findMany({
+        where: { userId, status: { in: ["completed", "approved"] } },
+        select: { type: true, amount: true },
+      }),
+    ]);
+
+    let balance = 0;
+    for (const tx of transactions) {
+      switch (tx.type) {
+        case "deposit":
+        case "profit":
+        case "admin_bonus":
+        case "referral":
+        case "transfer_received":
+          balance += tx.amount;
+          break;
+        case "withdrawal":
+        case "investment":
+        case "transfer_sent":
+          balance -= Math.abs(tx.amount);
+          break;
+      }
+    }
+    for (const op of completedFundOps) {
+      if (op.type === "deposit") balance += op.amount;
+      else if (op.type === "withdrawal") balance -= op.amount;
+    }
+
+    if (balance < amount) {
       return error(res, "Insufficient balance");
     }
 
@@ -182,10 +248,39 @@ export async function createTransfer(req: Request, res: Response) {
       return newTransfer;
     });
 
-    const updatedUser = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { balance: true },
-    });
+    // Recalculate sender's balance after transfer
+    const [updatedTransactions, updatedFundOps] = await Promise.all([
+      prisma.transaction.findMany({
+        where: { userId, status: "completed" },
+        select: { type: true, amount: true },
+      }),
+      prisma.fundOperation.findMany({
+        where: { userId, status: { in: ["completed", "approved"] } },
+        select: { type: true, amount: true },
+      }),
+    ]);
+
+    let updatedBalance = 0;
+    for (const tx of updatedTransactions) {
+      switch (tx.type) {
+        case "deposit":
+        case "profit":
+        case "admin_bonus":
+        case "referral":
+        case "transfer_received":
+          updatedBalance += tx.amount;
+          break;
+        case "withdrawal":
+        case "investment":
+        case "transfer_sent":
+          updatedBalance -= Math.abs(tx.amount);
+          break;
+      }
+    }
+    for (const op of updatedFundOps) {
+      if (op.type === "deposit") updatedBalance += op.amount;
+      else if (op.type === "withdrawal") updatedBalance -= op.amount;
+    }
 
     // Send notifications asynchronously
     setImmediate(async () => {
@@ -195,22 +290,51 @@ export async function createTransfer(req: Request, res: Response) {
           sender.email,
           recipientEmail,
           amount,
-          updatedUser!.balance,
+          updatedBalance,
           transfer.id
         );
 
         if (recipient) {
-          const updatedRecipient = await prisma.user.findUnique({
-            where: { id: recipient.id },
-            select: { balance: true },
-          });
+          // Calculate recipient's updated balance
+          const [recipientTransactions, recipientFundOps] = await Promise.all([
+            prisma.transaction.findMany({
+              where: { userId: recipient.id, status: "completed" },
+              select: { type: true, amount: true },
+            }),
+            prisma.fundOperation.findMany({
+              where: { userId: recipient.id, status: { in: ["completed", "approved"] } },
+              select: { type: true, amount: true },
+            }),
+          ]);
+
+          let recipientBalance = 0;
+          for (const tx of recipientTransactions) {
+            switch (tx.type) {
+              case "deposit":
+              case "profit":
+              case "admin_bonus":
+              case "referral":
+              case "transfer_received":
+                recipientBalance += tx.amount;
+                break;
+              case "withdrawal":
+              case "investment":
+              case "transfer_sent":
+                recipientBalance -= Math.abs(tx.amount);
+                break;
+            }
+          }
+          for (const op of recipientFundOps) {
+            if (op.type === "deposit") recipientBalance += op.amount;
+            else if (op.type === "withdrawal") recipientBalance -= op.amount;
+          }
 
           await sendTransferReceivedNotification(
             recipient.id,
             recipient.email,
             sender.email,
             amount,
-            updatedRecipient!.balance,
+            recipientBalance,
             transfer.id
           );
         }
@@ -223,7 +347,7 @@ export async function createTransfer(req: Request, res: Response) {
       res,
       {
         transfer,
-        balance: updatedUser!.balance,
+        balance: updatedBalance,
         recipientExists: !!recipient,
       },
       "Transfer successful",

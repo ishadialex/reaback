@@ -963,6 +963,7 @@ export async function sendTransferSentNotification(
         to: userEmail,
         subject: `💸 Transfer Sent - $${amount.toFixed(2)}`,
         html,
+        text: `Hello ${user?.firstName || "User"},\n\nYou have successfully sent money to ${recipientEmail}.\n\nAmount: -$${amount.toFixed(2)}\nRecipient: ${recipientEmail}\nTransfer ID: ${transferId}\nTime: ${new Date().toLocaleString()}\nNew Balance: $${newBalance.toFixed(2)}\n\nView your transfer history at: ${emailConfig.appUrl}/dashboard/transfers\n\n© ${new Date().getFullYear()} ${emailConfig.appName}. All rights reserved.`,
       },
       NotificationType.EMAIL
     );
@@ -1062,6 +1063,7 @@ export async function sendTransferReceivedNotification(
         to: userEmail,
         subject: `💰 Money Received - $${amount.toFixed(2)}`,
         html,
+        text: `Hello ${user?.firstName || "User"},\n\nYou have received money from ${senderEmail}.\n\nAmount: +$${amount.toFixed(2)}\nFrom: ${senderEmail}\nTransfer ID: ${transferId}\nTime: ${new Date().toLocaleString()}\nNew Balance: $${newBalance.toFixed(2)}\n\nView your transfer history at: ${emailConfig.appUrl}/dashboard/transfers\n\n© ${new Date().getFullYear()} ${emailConfig.appName}. All rights reserved.`,
       },
       NotificationType.EMAIL
     );
