@@ -380,3 +380,23 @@ model PaymentWallet {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
+
+// ──────────────────────────────────────────────
+// PDF Documents (Dynamic Menu Management)
+// ──────────────────────────────────────────────
+
+model PdfDocument {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  title        String   // Display name in menu
+  description  String   @default("") // Optional description
+  filePath     String   // Server file path (backend reference)
+  fileUrl      String   // Public URL path (frontend uses this)
+  displayOrder Int      @default(0) // Order in menu (lower = first)
+  category     String   @default("General") // Optional: group PDFs by category
+  isActive     Boolean  @default(true) // Toggle visibility
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([isActive, displayOrder])
+  @@index([category, displayOrder])
+}
