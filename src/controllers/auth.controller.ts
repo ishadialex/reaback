@@ -62,17 +62,23 @@ export async function register(req: Request, res: Response) {
     const passwordHash = await hashPassword(password);
     const userReferralCode = generateReferralCode();
 
-    // Create user with emailVerified: false (will be set to true after OTP verification)
+    // Create user with Account for email/password authentication
     const user = await prisma.user.create({
       data: {
         email: normalizedEmail,
-        passwordHash,
         firstName,
         lastName,
         phone,
         referralCode: userReferralCode,
         referredById: referrer?.id || null,
         emailVerified: false, // Explicitly set to false
+        accounts: {
+          create: {
+            provider: "credentials",
+            providerId: null,
+            passwordHash,
+          },
+        },
         settings: {
           create: {},
         },
@@ -134,10 +140,13 @@ export async function login(req: Request, res: Response) {
         email: true,
         firstName: true,
         lastName: true,
-        passwordHash: true,
         isActive: true,
         emailVerified: true,
         profilePhoto: true,
+        accounts: {
+          where: { provider: "credentials" },
+          select: { passwordHash: true },
+        },
       },
     });
 
@@ -151,7 +160,14 @@ export async function login(req: Request, res: Response) {
       return error(res, "Invalid email or password", 401);
     }
 
-    const valid = await comparePassword(password, user.passwordHash);
+    // Check if user has credentials account
+    const credentialsAccount = user.accounts[0];
+    if (!credentialsAccount || !credentialsAccount.passwordHash) {
+      console.log(`❌ Login failed: No credentials account - ${normalizedEmail} (try Google Sign-In)`);
+      return error(res, "Please sign in using Google", 401);
+    }
+
+    const valid = await comparePassword(password, credentialsAccount.passwordHash);
     if (!valid) {
       console.log(`❌ Login failed: Incorrect password - ${normalizedEmail}`);
       return error(res, "Invalid email or password", 401);
@@ -296,10 +312,13 @@ export async function forceLogin(req: Request, res: Response) {
         email: true,
         firstName: true,
         lastName: true,
-        passwordHash: true,
         isActive: true,
         emailVerified: true,
         profilePhoto: true,
+        accounts: {
+          where: { provider: "credentials" },
+          select: { passwordHash: true },
+        },
       },
     });
 
@@ -313,7 +332,14 @@ export async function forceLogin(req: Request, res: Response) {
       return error(res, "Invalid email or password", 401);
     }
 
-    const valid = await comparePassword(password, user.passwordHash);
+    // Check if user has credentials account
+    const credentialsAccount = user.accounts[0];
+    if (!credentialsAccount || !credentialsAccount.passwordHash) {
+      console.log(`❌ Force login failed: No credentials account - ${normalizedEmail}`);
+      return error(res, "Please sign in using Google", 401);
+    }
+
+    const valid = await comparePassword(password, credentialsAccount.passwordHash);
     if (!valid) {
       console.log(`❌ Force login failed: Incorrect password - ${normalizedEmail}`);
       return error(res, "Invalid email or password", 401);

@@ -88,68 +88,91 @@ export async function googleCallback(req: Request, res: Response) {
     const profilePhoto = payload.picture || null;
     const emailVerified = payload.email_verified || false;
 
-    // Check if user exists by Google ID or email
-    let user = await prisma.user.findFirst({
+    // 1. Check if Account exists with this Google ID
+    let account = await prisma.account.findFirst({
       where: {
-        OR: [{ googleId }, { email }],
+        provider: "google",
+        providerId: googleId,
+      },
+      include: {
+        user: true,
       },
     });
 
-    if (user) {
-      // User exists - update Google ID if not set and link account
-      if (!user.googleId && user.authProvider === "local") {
+    let user;
+
+    if (account) {
+      // ✅ Account exists - just log them in
+      user = account.user;
+      console.log(`✅ Google account found: ${email}`);
+
+      // Update profile photo if changed
+      if (profilePhoto && profilePhoto !== user.profilePhoto) {
         user = await prisma.user.update({
           where: { id: user.id },
-          data: {
-            googleId,
-            authProvider: "google",
-            emailVerified: true,
-            profilePhoto: profilePhoto || user.profilePhoto,
-          },
-        });
-      } else if (user.googleId && user.googleId !== googleId) {
-        // Email exists but linked to different Google account
-        return res.redirect(
-          `${env.FRONTEND_URL}/signin?error=email_already_exists`
-        );
-      } else {
-        // Update last login and profile photo if changed
-        user = await prisma.user.update({
-          where: { id: user.id },
-          data: {
-            profilePhoto: profilePhoto || user.profilePhoto,
-            emailVerified: true,
-          },
+          data: { profilePhoto, emailVerified: true },
         });
       }
     } else {
-      // New user - create account
-      let referrer = null;
-      if (referralCode) {
-        referrer = await prisma.user.findUnique({
-          where: { referralCode },
-          select: { id: true, email: true, firstName: true, lastName: true },
-        });
-      }
-
-      const userReferralCode = generateReferralCode();
-
-      user = await prisma.user.create({
-        data: {
-          email,
-          googleId,
-          authProvider: "google",
-          firstName,
-          lastName,
-          profilePhoto,
-          emailVerified,
-          referralCode: userReferralCode,
-          referredById: referrer?.id || null,
-          settings: {
-            create: {},
-          },
-        },
+      // 2. Check if User exists with this email
+      user = await prisma.user.findUnique({
+        where: { email },
+        include: { accounts: true },
       });
+
+      if (user) {
+        // 🔗 User exists but no Google account - LINK IT
+        await prisma.account.create({
+          data: {
+            userId: user.id,
+            provider: "google",
+            providerId: googleId,
+          },
+        });
+
+        // Update profile photo if not set
+        if (profilePhoto && !user.profilePhoto) {
+          user = await prisma.user.update({
+            where: { id: user.id },
+            data: { profilePhoto, emailVerified: true },
+          });
+        }
+
+        console.log(`🔗 Linked Google account to existing user: ${email}`);
+      } else {
+        // 🆕 Brand new user - create User + Google Account
+        let referrer = null;
+        if (referralCode) {
+          referrer = await prisma.user.findUnique({
+            where: { referralCode },
+            select: { id: true, email: true, firstName: true, lastName: true },
+          });
+        }
+
+        const userReferralCode = generateReferralCode();
+
+        user = await prisma.user.create({
+          data: {
+            email,
+            firstName,
+            lastName,
+            profilePhoto,
+            emailVerified,
+            referralCode: userReferralCode,
+            referredById: referrer?.id || null,
+            accounts: {
+              create: {
+                provider: "google",
+                providerId: googleId,
+              },
+            },
+            settings: {
+              create: {},
+            },
+          },
+        });
+
+        console.log(`🆕 Created new user with Google account: ${email}`);
 
       // Process referral bonus if user was referred
       if (referrer) {
@@ -209,6 +232,7 @@ export async function googleCallback(req: Request, res: Response) {
         } catch (refErr) {
           console.error("Error processing referral bonus:", refErr);
         }
+      }
       }
     }
 

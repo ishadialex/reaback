@@ -56,9 +56,9 @@ model InvestmentOption {
 model User {
   id               String    @id @default(auto()) @map("_id") @db.ObjectId
   email            String    @unique
-  passwordHash     String?   // Optional for OAuth users
-  authProvider     String    @default("local") // local | google
-  googleId         String?   // Google OAuth ID (uniqueness checked in code)
+  passwordHash     String?   // DEPRECATED: Use Account model instead (kept for migration)
+  authProvider     String    @default("local") // DEPRECATED: Use Account model instead
+  googleId         String?   // DEPRECATED: Use Account model instead
   firstName        String
   lastName         String
   phone            String    @default("")
@@ -87,6 +87,7 @@ model User {
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
+  accounts        Account[]  // Multi-provider authentication
   sessions        Session[]
   settings        UserSettings?
   tickets         SupportTicket[]
@@ -100,6 +101,30 @@ model User {
   referralsMade   Referral[]       @relation("ReferralsMade")
   referralsReceived Referral[]     @relation("ReferralsReceived")
   fundOperations  FundOperation[]
+}
+
+model Account {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String    @db.ObjectId
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  provider      String    // "credentials" | "google"
+  providerId    String?   // OAuth provider's unique ID (e.g., Google's "sub" claim)
+
+  // Only for "credentials" provider
+  passwordHash  String?
+
+  // OAuth-specific data (optional)
+  accessToken   String?
+  refreshToken  String?
+  expiresAt     DateTime?
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Unique constraints
+  @@unique([userId, provider])  // One provider per user
+  @@index([provider, providerId])  // Fast lookup by provider + providerId
 }
 
 model Session {
