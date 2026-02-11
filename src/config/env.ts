@@ -31,6 +31,8 @@ const envSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   GOOGLE_CALLBACK_URL: z.string().url().optional(),
+  // PDF Access Passcodes (comma-separated, up to 10)
+  PDF_ACCESS_PASSCODES: z.string().min(1).optional(),
 });
 
 export const env = envSchema.parse(process.env);

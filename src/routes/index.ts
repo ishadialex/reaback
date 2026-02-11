@@ -1,6 +1,7 @@
 import { Router } from "express";
 import monitorRoutes from "./monitor.routes.js";
 import publicRoutes from "./public.routes.js";
+import pdfRoutes from "./pdf.routes.js";
 import authRoutes from "./auth.routes.js";
 import oauthRoutes from "./oauth.routes.js";
 import profileRoutes from "./profile.routes.js";
@@ -30,6 +31,7 @@ router.use("/", monitorRoutes);
 
 // Public routes (no auth)
 router.use("/public", publicRoutes);
+router.use("/pdf", pdfRoutes);
 
 // Auth routes
 router.use("/auth", authRoutes);

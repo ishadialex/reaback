@@ -73,24 +73,36 @@ export async function changePassword(req: Request, res: Response) {
   try {
     const { currentPassword, newPassword } = req.body;
 
+    // Fetch user with credentials account
     const user = await prisma.user.findUnique({
       where: { id: req.userId },
-      select: { passwordHash: true },
+      select: {
+        id: true,
+        accounts: {
+          where: { provider: "credentials" },
+          select: { id: true, passwordHash: true },
+        },
+      },
     });
 
     if (!user) {
       return error(res, "User not found", 404);
     }
 
-    const valid = await comparePassword(currentPassword, user.passwordHash);
+    const credentialsAccount = user.accounts[0];
+    if (!credentialsAccount || !credentialsAccount.passwordHash) {
+      return error(res, "No password set for this account. Please use OAuth to sign in.", 400);
+    }
+
+    const valid = await comparePassword(currentPassword, credentialsAccount.passwordHash);
     if (!valid) {
       return error(res, "Current password is incorrect", 401);
     }
 
     const newHash = await hashPassword(newPassword);
 
-    await prisma.user.update({
-      where: { id: req.userId },
+    await prisma.account.update({
+      where: { id: credentialsAccount.id },
       data: { passwordHash: newHash },
     });
 
@@ -109,18 +121,31 @@ export async function deleteAccount(req: Request, res: Response) {
       return error(res, "Password is required to delete your account", 400);
     }
 
-    // Fetch user with password hash for verification
+    // Fetch user with credentials account for password verification
     const user = await prisma.user.findUnique({
       where: { id: req.userId },
-      select: { id: true, email: true, firstName: true, passwordHash: true },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        accounts: {
+          where: { provider: "credentials" },
+          select: { passwordHash: true },
+        },
+      },
     });
 
     if (!user) {
       return error(res, "User not found", 404);
     }
 
+    const credentialsAccount = user.accounts[0];
+    if (!credentialsAccount || !credentialsAccount.passwordHash) {
+      return error(res, "Password verification not available for OAuth accounts. Please contact support.", 400);
+    }
+
     // Verify password before deletion
-    const isValid = await comparePassword(password, user.passwordHash);
+    const isValid = await comparePassword(password, credentialsAccount.passwordHash);
     if (!isValid) {
       return error(res, "Incorrect password. Account deletion cancelled.", 401);
     }

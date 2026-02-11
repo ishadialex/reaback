@@ -280,12 +280,10 @@ export async function login(req: Request, res: Response) {
       sendLoginAlert(user.id, user.email, device, browser, location, ipAddress).catch(() => {});
     });
 
-    const { passwordHash: _, ...userData } = user;
-
     console.log(`✅ Login successful: ${normalizedEmail} from ${location}`);
 
     return success(res, {
-      user: userData,
+      user,
       accessToken,
       refreshToken,
     });
@@ -408,12 +406,10 @@ export async function forceLogin(req: Request, res: Response) {
       sendLoginAlert(user.id, user.email, device, browser, location, ipAddress).catch(() => {});
     });
 
-    const { passwordHash: _, ...userData } = user;
-
     console.log(`✅ Force login successful: ${normalizedEmail} from ${location} (${invalidatedSessions.count} device(s) logged out)`);
 
     return success(res, {
-      user: userData,
+      user,
       accessToken,
       refreshToken,
       message: `Successfully logged in. ${invalidatedSessions.count} other session(s) have been logged out.`,
