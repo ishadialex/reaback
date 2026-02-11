@@ -50,9 +50,9 @@ export async function getBalanceSummary(req: Request, res: Response) {
       else if (op.type === "withdrawal") withdrawals += op.amount;
     }
 
-    // balance = (deposits + profits + admin bonuses + referral bonuses)
+    // balance = (deposits + profits + admin bonuses + referral bonuses + transfers in)
     //         - (withdrawals + invested funds + transfers out)
-    const balance = (deposits + profits + adminBonuses + referralBonuses)
+    const balance = (deposits + profits + adminBonuses + referralBonuses + transferIn)
       - (withdrawals + investedFunds + transferOut);
 
     // Pending amounts from fund operations awaiting admin approval
