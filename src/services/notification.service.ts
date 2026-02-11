@@ -162,68 +162,66 @@ export async function sendLoginAlert(
       <!DOCTYPE html>
       <html>
       <head>
+        <meta charset="UTF-8">
         <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
           .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .alert-box { background: #fff; border-left: 4px solid #667eea; padding: 20px; margin: 20px 0; border-radius: 5px; }
-          .detail-row { padding: 10px 0; border-bottom: 1px solid #eee; }
-          .detail-label { font-weight: bold; color: #667eea; }
-          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
-          .secure-tip { background: #e7f3ff; border: 1px solid #b3d9ff; padding: 15px; margin: 20px 0; border-radius: 5px; }
+          .header { background: #4F46E5; color: white; padding: 25px 30px; text-align: center; border-radius: 8px 8px 0 0; }
+          .header h1 { margin: 0; font-size: 22px; font-weight: 600; }
+          .content { background: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px; }
+          .info-box { background: #f9fafb; border: 1px solid #e5e7eb; padding: 20px; margin: 20px 0; border-radius: 6px; }
+          .info-row { padding: 8px 0; display: flex; justify-content: space-between; border-bottom: 1px solid #e5e7eb; }
+          .info-row:last-child { border-bottom: none; }
+          .info-label { font-weight: 500; color: #6b7280; }
+          .info-value { color: #111827; text-align: right; }
+          .button { display: inline-block; background: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 15px 0; font-weight: 500; }
+          .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 13px; }
+          .footer a { color: #4F46E5; text-decoration: none; }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="header">
-            <h1>🔐 Security Alert</h1>
-            <p>New login detected on your account</p>
+            <h1>Account Login Notification</h1>
           </div>
           <div class="content">
             <p>Hello ${userName},</p>
-            <p>We detected a new login to your ${emailConfig.appName} account. If this was you, you can safely ignore this email.</p>
+            <p>A new login was detected on your ${emailConfig.appName} account. If this was you, no action is needed.</p>
 
-            <div class="alert-box">
-              <h3>Login Details:</h3>
-              <div class="detail-row">
-                <span class="detail-label">Device:</span> ${device}
+            <div class="info-box">
+              <div class="info-row">
+                <span class="info-label">Device</span>
+                <span class="info-value">${device}</span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">Browser:</span> ${browser}
+              <div class="info-row">
+                <span class="info-label">Browser</span>
+                <span class="info-value">${browser}</span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">Location:</span> ${location}
+              <div class="info-row">
+                <span class="info-label">Location</span>
+                <span class="info-value">${location}</span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">IP Address:</span> ${ipAddress}
+              <div class="info-row">
+                <span class="info-label">IP Address</span>
+                <span class="info-value">${ipAddress}</span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">Time:</span> ${new Date().toLocaleString()}
+              <div class="info-row">
+                <span class="info-label">Time</span>
+                <span class="info-value">${new Date().toLocaleString()}</span>
               </div>
             </div>
 
-            <div class="secure-tip">
-              <strong>⚠️ If this wasn't you:</strong>
-              <ul>
-                <li>Change your password immediately</li>
-                <li>Enable two-factor authentication</li>
-                <li>Review your active sessions</li>
-                <li>Contact our support team</li>
-              </ul>
-            </div>
+            <p>If you did not authorize this login, please secure your account immediately by changing your password and reviewing your active sessions.</p>
 
-            <p>
-              <a href="${emailConfig.appUrl}/dashboard/settings?tab=sessions"
-                 style="display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 10px 0;">
+            <p style="text-align: center;">
+              <a href="${emailConfig.appUrl}/dashboard/settings?tab=sessions" class="button">
                 View Active Sessions
               </a>
             </p>
           </div>
           <div class="footer">
             <p>&copy; ${new Date().getFullYear()} ${emailConfig.appName}. All rights reserved.</p>
-            <p>You received this email because login alerts are enabled for your account.</p>
-            <p><a href="${emailConfig.appUrl}/dashboard/settings?tab=notifications">Manage notification preferences</a></p>
+            <p>This is an automated notification. You can <a href="${emailConfig.appUrl}/dashboard/settings?tab=notifications">manage your preferences</a>.</p>
           </div>
         </div>
       </body>
@@ -234,9 +232,9 @@ export async function sendLoginAlert(
       userId,
       {
         to: userEmail,
-        subject: `🔐 New login to your ${emailConfig.appName} account`,
+        subject: `New login to your ${emailConfig.appName} account`,
         html,
-        text: `Hello ${userName},\n\nWe detected a new login to your ${emailConfig.appName} account. If this was you, you can safely ignore this email.\n\nLogin Details:\nDevice: ${device}\nBrowser: ${browser}\nLocation: ${location}\nIP Address: ${ipAddress}\nTime: ${new Date().toLocaleString()}\n\nIf this wasn't you:\n- Change your password immediately\n- Enable two-factor authentication\n- Review your active sessions\n- Contact our support team\n\nView Active Sessions: ${emailConfig.appUrl}/dashboard/settings?tab=sessions\n\n© ${new Date().getFullYear()} ${emailConfig.appName}. All rights reserved.`,
+        text: `Hello ${userName},\n\nA new login was detected on your ${emailConfig.appName} account. If this was you, no action is needed.\n\nLogin Details:\nDevice: ${device}\nBrowser: ${browser}\nLocation: ${location}\nIP Address: ${ipAddress}\nTime: ${new Date().toLocaleString()}\n\nIf you did not authorize this login, please secure your account immediately by changing your password and reviewing your active sessions.\n\nView Active Sessions: ${emailConfig.appUrl}/dashboard/settings?tab=sessions\n\n© ${new Date().getFullYear()} ${emailConfig.appName}. All rights reserved.\nThis is an automated notification.`,
       },
       NotificationType.LOGIN_ALERT
     );
