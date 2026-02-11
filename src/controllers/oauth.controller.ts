@@ -5,6 +5,8 @@ import { prisma } from "../config/database.js";
 import { success, error } from "../utils/response.js";
 import { signAccessToken, signRefreshToken } from "../utils/jwt.js";
 import { env } from "../config/env.js";
+import { sendLoginAlert } from "../services/notification.service.js";
+import { getLocationString } from "../services/geolocation.service.js";
 
 const googleClient = new OAuth2Client(
   env.GOOGLE_CLIENT_ID,
@@ -14,6 +16,22 @@ const googleClient = new OAuth2Client(
 
 function generateReferralCode(): string {
   return crypto.randomBytes(4).toString("hex"); // 8 hex chars
+}
+
+function parseUserAgent(ua: string | undefined): { device: string; browser: string } {
+  if (!ua) return { device: "Unknown", browser: "Unknown" };
+
+  let browser = "Unknown";
+  if (ua.includes("Firefox")) browser = "Firefox";
+  else if (ua.includes("Edg")) browser = "Edge";
+  else if (ua.includes("Chrome")) browser = "Chrome";
+  else if (ua.includes("Safari")) browser = "Safari";
+
+  let device = "Desktop";
+  if (ua.includes("Mobile")) device = "Mobile";
+  else if (ua.includes("Tablet")) device = "Tablet";
+
+  return { device, browser };
 }
 
 /**
@@ -112,8 +130,11 @@ export async function googleCallback(req: Request, res: Response) {
         // ✅ Account exists with valid user - just log them in
         console.log(`✅ Google account found: ${email}`);
 
-        // Update profile photo if changed
-        if (profilePhoto && profilePhoto !== user.profilePhoto) {
+        // Only update profile photo if user doesn't have a custom uploaded photo
+        // Custom photos are stored on cloud storage, not Google's CDN
+        const hasCustomPhoto = user.profilePhoto && !user.profilePhoto.includes('googleusercontent.com');
+
+        if (profilePhoto && !hasCustomPhoto && profilePhoto !== user.profilePhoto) {
           user = await prisma.user.update({
             where: { id: user.id },
             data: { profilePhoto, emailVerified: true },
@@ -267,17 +288,27 @@ export async function googleCallback(req: Request, res: Response) {
       picture: user.profilePhoto || undefined
     });
 
+    // Parse user agent and get location for session tracking
+    const { device, browser } = parseUserAgent(req.headers["user-agent"]);
+    const ipAddress = req.ip || "";
+    const location = await getLocationString(ipAddress);
+
     // Create session
     await prisma.session.create({
       data: {
         userId: user.id,
         token: refreshToken,
-        device: "Web",
-        browser: "Google OAuth",
-        ipAddress: req.ip || "",
-        location: "Unknown",
+        device,
+        browser,
+        ipAddress,
+        location,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
       },
+    });
+
+    // Send login alert notification
+    setImmediate(() => {
+      sendLoginAlert(user.id, user.email, device, browser, location, ipAddress).catch(() => {});
     });
 
     // Redirect to frontend with tokens

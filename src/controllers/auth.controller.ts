@@ -740,15 +740,44 @@ export async function resetPassword(req: Request, res: Response) {
     // Hash new password
     const newPasswordHash = await hashPassword(newPassword);
 
-    // Update user password
-    const user = await prisma.user.update({
+    // Find the user
+    const user = await prisma.user.findUnique({
       where: { email: resetRecord.email },
-      data: { passwordHash: newPasswordHash },
-      select: { id: true, email: true, firstName: true },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        accounts: {
+          where: { provider: "credentials" },
+          select: { id: true },
+        },
+      },
     });
 
     if (!user) {
       return error(res, "User not found", 404);
+    }
+
+    // Check if credentials account exists
+    const credentialsAccount = user.accounts[0];
+
+    if (credentialsAccount) {
+      // Update existing credentials account
+      await prisma.account.update({
+        where: { id: credentialsAccount.id },
+        data: { passwordHash: newPasswordHash },
+      });
+    } else {
+      // Create new credentials account (for users who signed up with OAuth)
+      await prisma.account.create({
+        data: {
+          userId: user.id,
+          provider: "credentials",
+          providerId: null,
+          passwordHash: newPasswordHash,
+        },
+      });
+      console.log(`🔗 Created credentials account for OAuth user: ${user.email}`);
     }
 
     // Mark token as used
