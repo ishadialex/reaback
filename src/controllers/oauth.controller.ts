@@ -88,32 +88,45 @@ export async function googleCallback(req: Request, res: Response) {
     const profilePhoto = payload.picture || null;
     const emailVerified = payload.email_verified || false;
 
-    // 1. Check if Account exists with this Google ID
-    let account = await prisma.account.findFirst({
+    // 1. Check if Account exists with this Google ID (without include to avoid null errors)
+    const account = await prisma.account.findFirst({
       where: {
         provider: "google",
         providerId: googleId,
       },
-      include: {
-        user: true,
+      select: {
+        id: true,
+        userId: true,
       },
     });
 
     let user;
 
     if (account) {
-      // ✅ Account exists - just log them in
-      user = account.user;
-      console.log(`✅ Google account found: ${email}`);
+      // Try to fetch the associated user
+      user = await prisma.user.findUnique({
+        where: { id: account.userId },
+      });
 
-      // Update profile photo if changed
-      if (profilePhoto && profilePhoto !== user.profilePhoto) {
-        user = await prisma.user.update({
-          where: { id: user.id },
-          data: { profilePhoto, emailVerified: true },
-        });
+      if (user) {
+        // ✅ Account exists with valid user - just log them in
+        console.log(`✅ Google account found: ${email}`);
+
+        // Update profile photo if changed
+        if (profilePhoto && profilePhoto !== user.profilePhoto) {
+          user = await prisma.user.update({
+            where: { id: user.id },
+            data: { profilePhoto, emailVerified: true },
+          });
+        }
+      } else {
+        // Clean up orphaned account (Account without User)
+        console.log(`⚠️  Cleaning up orphaned Account for Google ID: ${googleId}`);
+        await prisma.account.delete({ where: { id: account.id } });
       }
-    } else {
+    }
+
+    if (!user) {
       // 2. Check if User exists with this email
       user = await prisma.user.findUnique({
         where: { email },
