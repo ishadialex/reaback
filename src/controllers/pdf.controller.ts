@@ -145,6 +145,11 @@ export async function getPdfDocuments(req: Request, res: Response) {
       ],
     });
 
+    // Prevent caching to ensure clients always get fresh PDF URLs
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+
     console.log(`📄 Fetched ${documents.length} active PDF document(s)`);
     return success(res, documents);
   } catch (err) {
