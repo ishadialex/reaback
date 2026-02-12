@@ -164,6 +164,16 @@ model PasswordReset {
   @@index([email])
 }
 
+model OAuthToken {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  token        String   @unique
+  userId       String   @db.ObjectId
+  accessToken  String
+  refreshToken String
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+}
+
 // ──────────────────────────────────────────────
 // User Settings
 // ──────────────────────────────────────────────

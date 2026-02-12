@@ -935,3 +935,58 @@ export async function logout(req: Request, res: Response) {
     return error(res, "Logout failed", 500);
   }
 }
+
+export async function exchangeOAuthToken(req: Request, res: Response) {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return error(res, "Token is required", 400);
+    }
+
+    // Find the OAuth token in database
+    const oAuthToken = await prisma.oAuthToken.findUnique({
+      where: { token },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            phone: true,
+            profilePhoto: true,
+            referralCode: true,
+            emailVerified: true,
+          },
+        },
+      },
+    });
+
+    if (!oAuthToken) {
+      return error(res, "Invalid or expired token", 401);
+    }
+
+    // Check if token has expired
+    if (new Date() > oAuthToken.expiresAt) {
+      // Delete expired token
+      await prisma.oAuthToken.delete({ where: { token } });
+      return error(res, "Token has expired", 401);
+    }
+
+    // Set httpOnly cookies with the stored tokens
+    setAccessTokenCookie(res, oAuthToken.accessToken);
+    setRefreshTokenCookie(res, oAuthToken.refreshToken);
+
+    // Delete the temporary token (one-time use)
+    await prisma.oAuthToken.delete({ where: { token } });
+
+    // Return user data
+    return success(res, {
+      user: oAuthToken.user,
+    }, "Authentication successful");
+  } catch (err) {
+    console.error("exchangeOAuthToken error:", err);
+    return error(res, "Token exchange failed", 500);
+  }
+}

@@ -312,12 +312,24 @@ export async function googleCallback(req: Request, res: Response) {
       sendLoginAlert(user.id, user.email, device, browser, location, ipAddress).catch(() => {});
     });
 
-    // Set tokens as httpOnly cookies
-    setAccessTokenCookie(res, accessToken);
-    setRefreshTokenCookie(res, refreshToken);
+    // Create temporary OAuth token for cross-domain exchange
+    // This token will be exchanged for real httpOnly cookies via the frontend rewrite proxy
+    const tempToken = crypto.randomBytes(32).toString("hex");
+    const tempTokenExpiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
-    // Redirect to frontend - tokens are now in cookies, not URL
-    const redirectUrl = `${env.FRONTEND_URL}/auth/callback`;
+    // Store temporary token in database
+    await prisma.oAuthToken.create({
+      data: {
+        token: tempToken,
+        userId: user.id,
+        accessToken,
+        refreshToken,
+        expiresAt: tempTokenExpiry,
+      },
+    });
+
+    // Redirect to frontend with temporary token (will be exchanged for cookies)
+    const redirectUrl = `${env.FRONTEND_URL}/auth/callback?token=${tempToken}`;
     return res.redirect(redirectUrl);
   } catch (err) {
     console.error("Google OAuth callback error:", err);
