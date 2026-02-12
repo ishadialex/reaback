@@ -9,7 +9,7 @@ const isProduction = env.NODE_ENV === "production";
 const cookieConfig = {
   httpOnly: true, // Cannot be accessed by JavaScript (XSS protection)
   secure: isProduction, // Only sent over HTTPS in production
-  sameSite: "strict" as const, // CSRF protection
+  sameSite: (isProduction ? "none" : "strict") as "none" | "strict", // "none" for cross-origin in production, "strict" for localhost
   path: "/", // Available for all routes
 };
 
