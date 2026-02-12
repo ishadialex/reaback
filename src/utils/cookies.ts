@@ -1,7 +1,6 @@
 import { Response } from "express";
-import { env } from "../config/env.js";
 
-const isProduction = env.NODE_ENV === "production";
+const isProduction = process.env.NODE_ENV === "production";
 
 /**
  * Cookie configuration for httpOnly cookies
