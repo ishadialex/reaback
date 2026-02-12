@@ -8,7 +8,7 @@ const isProduction = process.env.NODE_ENV === "production";
 const cookieConfig = {
   httpOnly: true, // Cannot be accessed by JavaScript (XSS protection)
   secure: isProduction, // Only sent over HTTPS in production
-  sameSite: (isProduction ? "none" : "strict") as "none" | "strict", // "none" for cross-origin in production, "strict" for localhost
+  sameSite: (isProduction ? "none" : "lax") as "none" | "lax", // "none" for cross-origin in production, "lax" for localhost
   path: "/", // Available for all routes
 };
 
