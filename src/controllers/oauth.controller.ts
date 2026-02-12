@@ -7,6 +7,7 @@ import { signAccessToken, signRefreshToken } from "../utils/jwt.js";
 import { env } from "../config/env.js";
 import { sendLoginAlert } from "../services/notification.service.js";
 import { getLocationString } from "../services/geolocation.service.js";
+import { setAccessTokenCookie, setRefreshTokenCookie } from "../utils/cookies.js";
 
 const googleClient = new OAuth2Client(
   env.GOOGLE_CLIENT_ID,
@@ -311,8 +312,12 @@ export async function googleCallback(req: Request, res: Response) {
       sendLoginAlert(user.id, user.email, device, browser, location, ipAddress).catch(() => {});
     });
 
-    // Redirect to frontend with tokens
-    const redirectUrl = `${env.FRONTEND_URL}/auth/callback?accessToken=${accessToken}&refreshToken=${refreshToken}`;
+    // Set tokens as httpOnly cookies
+    setAccessTokenCookie(res, accessToken);
+    setRefreshTokenCookie(res, refreshToken);
+
+    // Redirect to frontend - tokens are now in cookies, not URL
+    const redirectUrl = `${env.FRONTEND_URL}/auth/callback`;
     return res.redirect(redirectUrl);
   } catch (err) {
     console.error("Google OAuth callback error:", err);

@@ -13,6 +13,7 @@ import { sendOtpEmail, sendPasswordResetEmail } from "../services/email.service.
 import { sendLoginAlert, sendReferralSuccessNotification, sendWelcomeBonusNotification } from "../services/notification.service.js";
 import { getLocationString } from "../services/geolocation.service.js";
 import { env } from "../config/env.js";
+import { setAccessTokenCookie, setRefreshTokenCookie, clearAuthCookies, getRefreshTokenFromCookies } from "../utils/cookies.js";
 
 function generateReferralCode(): string {
   return crypto.randomBytes(4).toString("hex"); // 8 hex chars
@@ -282,10 +283,13 @@ export async function login(req: Request, res: Response) {
 
     console.log(`✅ Login successful: ${normalizedEmail} from ${location}`);
 
+    // Set tokens as httpOnly cookies
+    setAccessTokenCookie(res, accessToken);
+    setRefreshTokenCookie(res, refreshToken);
+
     return success(res, {
       user,
-      accessToken,
-      refreshToken,
+      // Tokens are now in httpOnly cookies, not in response
     });
   } catch (err) {
     console.error("login error:", err);
@@ -408,10 +412,13 @@ export async function forceLogin(req: Request, res: Response) {
 
     console.log(`✅ Force login successful: ${normalizedEmail} from ${location} (${invalidatedSessions.count} device(s) logged out)`);
 
+    // Set tokens as httpOnly cookies
+    setAccessTokenCookie(res, accessToken);
+    setRefreshTokenCookie(res, refreshToken);
+
     return success(res, {
       user,
-      accessToken,
-      refreshToken,
+      // Tokens are now in httpOnly cookies, not in response
       message: `Successfully logged in. ${invalidatedSessions.count} other session(s) have been logged out.`,
     });
   } catch (err) {
@@ -571,7 +578,11 @@ export async function verifyOtp(req: Request, res: Response) {
       },
     });
 
-    // Return user data with tokens
+    // Set tokens as httpOnly cookies
+    setAccessTokenCookie(res, accessToken);
+    setRefreshTokenCookie(res, refreshToken);
+
+    // Return user data (tokens are in httpOnly cookies)
     return success(res, {
       user: {
         id: user.id,
@@ -583,8 +594,7 @@ export async function verifyOtp(req: Request, res: Response) {
         profilePhoto: user.profilePhoto,
         emailVerified: true,
       },
-      accessToken,
-      refreshToken,
+      // Tokens are now in httpOnly cookies, not in response
     }, "Email verified successfully");
   } catch (err) {
     console.error("verifyOtp error:", err);
@@ -799,10 +809,11 @@ export async function resetPassword(req: Request, res: Response) {
 
 export async function refreshToken(req: Request, res: Response) {
   try {
-    const { refreshToken: token } = req.body;
+    // Read refresh token from httpOnly cookie instead of body
+    const token = getRefreshTokenFromCookies(req);
 
     if (!token) {
-      return error(res, "Refresh token is required", 400);
+      return error(res, "Refresh token is required. Please login again.", 400);
     }
 
     let payload;
@@ -852,9 +863,13 @@ export async function refreshToken(req: Request, res: Response) {
       },
     });
 
+    // Set new tokens as httpOnly cookies
+    setAccessTokenCookie(res, newAccessToken);
+    setRefreshTokenCookie(res, newRefreshToken);
+
     return success(res, {
-      accessToken: newAccessToken,
-      refreshToken: newRefreshToken,
+      // Tokens are now in httpOnly cookies, not in response
+      message: "Tokens refreshed successfully",
     });
   } catch (err) {
     console.error("refreshToken error:", err);
@@ -864,7 +879,8 @@ export async function refreshToken(req: Request, res: Response) {
 
 export async function validateSession(req: Request, res: Response) {
   try {
-    const { refreshToken: token } = req.body;
+    // Read refresh token from httpOnly cookie instead of body
+    const token = getRefreshTokenFromCookies(req);
 
     if (!token) {
       return error(res, "No token provided", 401);
@@ -888,26 +904,28 @@ export async function validateSession(req: Request, res: Response) {
 
 export async function logout(req: Request, res: Response) {
   try {
-    const { refreshToken: token } = req.body;
+    // Read refresh token from httpOnly cookie
+    const token = getRefreshTokenFromCookies(req);
 
-    if (!token) {
-      return error(res, "Refresh token is required", 400);
-    }
-
-    // Try to find and deactivate the session
-    const session = await prisma.session.findUnique({
-      where: { token },
-    });
-
-    if (session) {
-      await prisma.session.update({
-        where: { id: session.id },
-        data: { isActive: false },
+    if (token) {
+      // Try to find and deactivate the session
+      const session = await prisma.session.findUnique({
+        where: { token },
       });
-      console.log(`✓ Logout successful for session ${session.id}`);
-    } else {
-      console.log(`⚠️ Logout called with non-existent or already logged out session`);
+
+      if (session) {
+        await prisma.session.update({
+          where: { id: session.id },
+          data: { isActive: false },
+        });
+        console.log(`✓ Logout successful for session ${session.id}`);
+      } else {
+        console.log(`⚠️ Logout called with non-existent or already logged out session`);
+      }
     }
+
+    // Clear all authentication cookies
+    clearAuthCookies(res);
 
     // Always return success even if session doesn't exist
     // (idempotent operation - multiple logouts should not fail)
