@@ -4,6 +4,7 @@ import { env } from "../config/env.js";
 import { prisma } from "../config/database.js";
 import fs from "fs";
 import path from "path";
+import jwt from "jsonwebtoken";
 
 interface VerifyPasscodeRequest {
   passcode: string;
@@ -29,26 +30,8 @@ interface UpdatePdfDocumentRequest {
 }
 
 /**
- * Helper function to verify passcode
- */
-function verifyPasscodeHelper(passcode: string): boolean {
-  const passcodesString = env.PDF_ACCESS_PASSCODES;
-
-  if (!passcodesString) {
-    return false;
-  }
-
-  const allowedPasscodes = passcodesString
-    .split(",")
-    .map((code) => code.trim())
-    .filter((code) => code.length > 0);
-
-  return allowedPasscodes.includes(passcode);
-}
-
-/**
  * POST /api/pdf/verify-passcode
- * Verify PDF access passcode against multiple allowed passcodes
+ * Verify PDF access passcode and return JWT token with expiration
  */
 export async function verifyPasscode(
   req: Request<{}, {}, VerifyPasscodeRequest>,
@@ -96,7 +79,40 @@ export async function verifyPasscode(
     // Verify passcode matches any of the allowed passcodes
     if (allowedPasscodes.includes(passcode)) {
       console.log(`✅ Valid PDF passcode provided`);
-      return success(res, null, "Access granted");
+
+      // Generate JWT token with expiration (1 hour default)
+      const expiresIn: string = env.PDF_TOKEN_EXPIRY;
+      const token = jwt.sign(
+        {
+          purpose: "pdf_access",
+          granted: Date.now()
+        },
+        env.JWT_SECRET,
+        { expiresIn } as jwt.SignOptions
+      );
+
+      // Calculate expiration timestamp
+      const expiryMs = expiresIn.endsWith('h')
+        ? parseInt(expiresIn) * 60 * 60 * 1000
+        : expiresIn.endsWith('m')
+        ? parseInt(expiresIn) * 60 * 1000
+        : 60 * 60 * 1000; // Default 1 hour
+
+      const expiresAt = new Date(Date.now() + expiryMs);
+
+      // Set httpOnly cookie for extra security
+      res.cookie("pdf_access_token", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        maxAge: expiryMs,
+      });
+
+      return success(res, {
+        token,
+        expiresAt,
+        expiresIn,
+      }, "Access granted");
     } else {
       console.log(`❌ Invalid PDF passcode attempt`);
       return error(res, "Invalid passcode", 401);
@@ -278,7 +294,7 @@ export async function deletePdfDocument(req: Request, res: Response) {
 
 /**
  * GET /api/pdf/serve/:filename
- * Securely serve PDF file with passcode verification
+ * Securely serve PDF file with JWT token verification
  */
 export async function servePdfFile(req: Request, res: Response) {
   try {
@@ -286,24 +302,44 @@ export async function servePdfFile(req: Request, res: Response) {
       ? req.params.filename[0]
       : req.params.filename;
 
-    // Get passcode from Authorization header or query param
-    const passcode =
-      req.headers.authorization?.replace("Bearer ", "") ||
-      (req.query.passcode as string);
+    // Get token from multiple sources (priority order)
+    const token =
+      req.headers.authorization?.replace("Bearer ", "") || // Authorization header
+      (req.query.token as string) || // Query parameter
+      req.cookies?.pdf_access_token; // httpOnly cookie
 
-    if (!passcode) {
+    if (!token) {
       return res.status(401).json({
         success: false,
-        message: "Passcode required. Use Authorization: Bearer <passcode> header or ?passcode=<passcode> query parameter",
+        message: "Access token required. Please verify passcode first.",
       });
     }
 
-    // Verify passcode
-    if (!verifyPasscodeHelper(passcode)) {
-      console.log(`❌ Invalid passcode attempt for PDF: ${filename}`);
+    // Verify JWT token
+    let decoded;
+    try {
+      decoded = jwt.verify(token, env.JWT_SECRET) as {
+        purpose: string;
+        granted: number;
+      };
+
+      // Verify token purpose
+      if (decoded.purpose !== "pdf_access") {
+        return res.status(403).json({
+          success: false,
+          message: "Invalid token purpose",
+        });
+      }
+    } catch (err) {
+      if (err instanceof jwt.TokenExpiredError) {
+        return res.status(401).json({
+          success: false,
+          message: "Access token expired. Please verify passcode again.",
+        });
+      }
       return res.status(403).json({
         success: false,
-        message: "Invalid passcode",
+        message: "Invalid access token",
       });
     }
 
@@ -341,9 +377,11 @@ export async function servePdfFile(req: Request, res: Response) {
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Length", stat.size);
     res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
-    res.setHeader("Cache-Control", "private, max-age=3600"); // Cache for 1 hour
+    res.setHeader("Cache-Control", "private, no-cache, no-store, must-revalidate");
+    res.setHeader("Expires", "0");
 
-    console.log(`✅ Serving PDF: ${filename} (${stat.size} bytes)`);
+    const grantedTime = new Date(decoded.granted).toISOString();
+    console.log(`✅ Serving PDF: ${filename} (${stat.size} bytes) - Token granted at: ${grantedTime}`);
 
     // Stream the file
     const fileStream = fs.createReadStream(filePath);

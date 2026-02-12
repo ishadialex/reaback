@@ -33,6 +33,8 @@ const envSchema = z.object({
   GOOGLE_CALLBACK_URL: z.string().url().optional(),
   // PDF Access Passcodes (comma-separated, up to 10)
   PDF_ACCESS_PASSCODES: z.string().min(1).optional(),
+  // PDF Token Expiry (e.g., "1h", "30m", "2h")
+  PDF_TOKEN_EXPIRY: z.string().default("1h"),
 });
 
 export const env = envSchema.parse(process.env);
