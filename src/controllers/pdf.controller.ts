@@ -2,6 +2,8 @@ import { Request, Response } from "express";
 import { success, error } from "../utils/response.js";
 import { env } from "../config/env.js";
 import { prisma } from "../config/database.js";
+import fs from "fs";
+import path from "path";
 
 interface VerifyPasscodeRequest {
   passcode: string;
@@ -24,6 +26,24 @@ interface UpdatePdfDocumentRequest {
   displayOrder?: number;
   category?: string;
   isActive?: boolean;
+}
+
+/**
+ * Helper function to verify passcode
+ */
+function verifyPasscodeHelper(passcode: string): boolean {
+  const passcodesString = env.PDF_ACCESS_PASSCODES;
+
+  if (!passcodesString) {
+    return false;
+  }
+
+  const allowedPasscodes = passcodesString
+    .split(",")
+    .map((code) => code.trim())
+    .filter((code) => code.length > 0);
+
+  return allowedPasscodes.includes(passcode);
 }
 
 /**
@@ -253,5 +273,98 @@ export async function deletePdfDocument(req: Request, res: Response) {
   } catch (err) {
     console.error("Error deleting PDF document:", err);
     return error(res, "Failed to delete PDF document", 500);
+  }
+}
+
+/**
+ * GET /api/pdf/serve/:filename
+ * Securely serve PDF file with passcode verification
+ */
+export async function servePdfFile(req: Request, res: Response) {
+  try {
+    const filename = Array.isArray(req.params.filename)
+      ? req.params.filename[0]
+      : req.params.filename;
+
+    // Get passcode from Authorization header or query param
+    const passcode =
+      req.headers.authorization?.replace("Bearer ", "") ||
+      (req.query.passcode as string);
+
+    if (!passcode) {
+      return res.status(401).json({
+        success: false,
+        message: "Passcode required. Use Authorization: Bearer <passcode> header or ?passcode=<passcode> query parameter",
+      });
+    }
+
+    // Verify passcode
+    if (!verifyPasscodeHelper(passcode)) {
+      console.log(`❌ Invalid passcode attempt for PDF: ${filename}`);
+      return res.status(403).json({
+        success: false,
+        message: "Invalid passcode",
+      });
+    }
+
+    // Check if file exists in database
+    const document = await prisma.pdfDocument.findFirst({
+      where: {
+        fileUrl: `/pdfs/${filename}`,
+        isActive: true,
+      },
+    });
+
+    if (!document) {
+      return res.status(404).json({
+        success: false,
+        message: "PDF not found",
+      });
+    }
+
+    // Construct file path
+    const filePath = path.join(process.cwd(), "public", "pdfs", filename);
+
+    // Check if file exists on filesystem
+    if (!fs.existsSync(filePath)) {
+      console.error(`PDF file not found on filesystem: ${filePath}`);
+      return res.status(404).json({
+        success: false,
+        message: "PDF file not found on server",
+      });
+    }
+
+    // Get file stats for content length
+    const stat = fs.statSync(filePath);
+
+    // Set headers for PDF streaming
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Length", stat.size);
+    res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
+    res.setHeader("Cache-Control", "private, max-age=3600"); // Cache for 1 hour
+
+    console.log(`✅ Serving PDF: ${filename} (${stat.size} bytes)`);
+
+    // Stream the file
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+
+    fileStream.on("error", (err) => {
+      console.error("Error streaming PDF:", err);
+      if (!res.headersSent) {
+        res.status(500).json({
+          success: false,
+          message: "Error streaming PDF file",
+        });
+      }
+    });
+  } catch (err) {
+    console.error("Error serving PDF file:", err);
+    if (!res.headersSent) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to serve PDF file",
+      });
+    }
   }
 }

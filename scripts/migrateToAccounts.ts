@@ -69,14 +69,31 @@ async function migrateUsersToAccounts() {
 
         // Create Account records if we have any
         if (accountsToCreate.length > 0) {
-          await prisma.account.createMany({
-            data: accountsToCreate,
-            skipDuplicates: true,
-          });
+          const createdAccounts = [];
 
-          const methods = accountsToCreate.map(a => a.provider).join(" + ");
-          console.log(`✅ ${user.email} - Migrated ${accountsToCreate.length} account(s): ${methods}`);
-          migratedCount++;
+          // MongoDB doesn't support skipDuplicates, so we create individually
+          for (const accountData of accountsToCreate) {
+            try {
+              await prisma.account.create({ data: accountData });
+              createdAccounts.push(accountData.provider);
+            } catch (error: any) {
+              // Skip if account already exists (duplicate error)
+              if (error.code === 'P2002' || error.message.includes('Unique constraint')) {
+                console.log(`  ⚠️  Account ${accountData.provider} already exists for ${user.email}`);
+              } else {
+                throw error; // Re-throw unexpected errors
+              }
+            }
+          }
+
+          if (createdAccounts.length > 0) {
+            const methods = createdAccounts.join(" + ");
+            console.log(`✅ ${user.email} - Migrated ${createdAccounts.length} account(s): ${methods}`);
+            migratedCount++;
+          } else {
+            console.log(`⏭️  ${user.email} - All accounts already exist`);
+            skippedCount++;
+          }
         } else {
           console.log(`⚠️  ${user.email} - No auth data found (passwordHash or googleId missing)`);
           skippedCount++;

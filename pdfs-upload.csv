@@ -1,0 +1,6 @@
+title,description,filePath,fileUrl,displayOrder,category
+Available Arbitrary Opportunities,Investment opportunities available for arbitrage,public/pdfs/available -Arbitrary-Opportunities.pdf,/pdfs/available -Arbitrary-Opportunities.pdf,1,Investment
+Investment Prospectus,Official investment prospectus document,public/pdfs/prospectus.pdf,/pdfs/prospectus.pdf,2,General
+Terms & Conditions,Legal terms and conditions,public/pdfs/terms.pdf,/pdfs/terms.pdf,3,Legal
+Annual Report 2024,Annual financial report,public/pdfs/annual-report-2024.pdf,/pdfs/annual-report-2024.pdf,4,Financial
+Property Catalog,Complete property listings,public/pdfs/property-catalog.pdf,/pdfs/property-catalog.pdf,5,Properties

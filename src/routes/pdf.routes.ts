@@ -6,6 +6,7 @@ import {
   createPdfDocument,
   updatePdfDocument,
   deletePdfDocument,
+  servePdfFile,
 } from "../controllers/pdf.controller.js";
 import { authenticate } from "../middleware/authenticate.js";
 import { adminAuthFlexible } from "../middleware/adminAuthFlexible.js";
@@ -30,6 +31,13 @@ router.get("/documents", getPdfDocuments);
  * Get single PDF document by ID
  */
 router.get("/documents/:id", getPdfDocument);
+
+/**
+ * GET /api/pdf/serve/:filename
+ * Securely serve PDF file with passcode verification
+ * Requires: Authorization header or passcode query param
+ */
+router.get("/serve/:filename", servePdfFile);
 
 // Admin routes (API key OR admin role required)
 /**

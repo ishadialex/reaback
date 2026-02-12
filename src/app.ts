@@ -54,6 +54,9 @@ app.use(express.urlencoded({ extended: true }));
 // Static files (uploaded images)
 app.use("/uploads", express.static("uploads"));
 
+// PDF documents are served securely through /api/pdf/serve/:filename
+// Direct access via /pdfs/ is disabled for security
+
 // API routes
 app.use("/api", routes);
 
