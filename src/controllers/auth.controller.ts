@@ -499,6 +499,7 @@ export async function verifyOtp(req: Request, res: Response) {
     });
 
     // Notify admin about new user signup
+    console.log(`📧 Preparing to send admin signup notification for ${user.email}`);
     let referrer = null;
     if (user.referredById) {
       referrer = await prisma.user.findUnique({
@@ -508,13 +509,14 @@ export async function verifyOtp(req: Request, res: Response) {
     }
 
     setImmediate(() => {
+      console.log(`📧 Calling notifyAdminNewUserSignup for ${user.email}`);
       notifyAdminNewUserSignup(
         `${user.firstName} ${user.lastName}`,
         user.email,
         user.id,
         referrer?.referralCode,
         referrer ? `${referrer.firstName} ${referrer.lastName}` : undefined
-      ).catch((err) => console.error("Error sending admin signup notification:", err));
+      ).catch((err) => console.error("❌ Error sending admin signup notification:", err));
     });
 
     // Process referral bonus if user was referred

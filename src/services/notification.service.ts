@@ -1303,6 +1303,167 @@ export async function sendWelcomeBonusNotification(
 }
 
 /**
+ * Send welcome email to newsletter subscriber
+ */
+export async function sendNewsletterWelcomeEmail(
+  email: string,
+  firstName?: string
+): Promise<void> {
+  try {
+    if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      console.log("⚠️  Email not configured, skipping newsletter welcome email");
+      return;
+    }
+
+    const subscriberName = firstName || "there";
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px 30px; text-align: center; border-radius: 10px 10px 0 0; }
+          .header h1 { margin: 0; font-size: 28px; font-weight: 600; }
+          .content { background: #f9f9f9; padding: 40px 30px; border-radius: 0 0 10px 10px; }
+          .welcome-box { background: #fff; padding: 25px; margin: 25px 0; border-radius: 8px; border-left: 4px solid #667eea; }
+          .button { display: inline-block; background: #667eea; color: white; padding: 14px 35px; text-decoration: none; border-radius: 30px; margin: 20px 0; font-weight: bold; }
+          .footer { text-align: center; padding: 25px 20px; color: #888; font-size: 12px; }
+          .footer a { color: #667eea; text-decoration: none; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🎉 Welcome to Our Newsletter!</h1>
+          </div>
+          <div class="content">
+            <p style="font-size: 18px;">Hello ${subscriberName},</p>
+
+            <div class="welcome-box">
+              <p style="margin: 0; font-size: 16px;">Thank you for subscribing to the ${emailConfig.appName} newsletter! We're excited to have you as part of our community.</p>
+            </div>
+
+            <p>You'll now receive:</p>
+            <ul style="line-height: 2;">
+              <li>📰 Latest updates and news</li>
+              <li>💡 Exclusive investment tips and insights</li>
+              <li>🎁 Special offers and promotions</li>
+              <li>📊 Market trends and analysis</li>
+            </ul>
+
+            <p style="text-align: center;">
+              <a href="${emailConfig.appUrl}" class="button">
+                Visit Our Website
+              </a>
+            </p>
+
+            <p style="color: #666; font-size: 14px; margin-top: 30px;">You can unsubscribe at any time by clicking the unsubscribe link in any of our emails.</p>
+          </div>
+          <div class="footer">
+            <p>&copy; ${new Date().getFullYear()} ${emailConfig.appName}. All rights reserved.</p>
+            <p>
+              <a href="${emailConfig.appUrl}">Visit Website</a> |
+              <a href="${emailConfig.appUrl}/contact">Contact Us</a>
+            </p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    await transporter.sendMail({
+      from: emailConfig.from,
+      to: email,
+      subject: `Welcome to ${emailConfig.appName} Newsletter! 🎉`,
+      html,
+      text: `Hello ${subscriberName},\n\nThank you for subscribing to the ${emailConfig.appName} newsletter! We're excited to have you as part of our community.\n\nYou'll now receive:\n- Latest updates and news\n- Exclusive investment tips and insights\n- Special offers and promotions\n- Market trends and analysis\n\nYou can unsubscribe at any time.\n\n© ${new Date().getFullYear()} ${emailConfig.appName}. All rights reserved.`,
+    });
+
+    console.log(`✅ Newsletter welcome email sent to ${email}`);
+  } catch (error) {
+    console.error("Error sending newsletter welcome email:", error);
+  }
+}
+
+/**
+ * Send contact form message to admin
+ */
+export async function sendContactFormToAdmin(
+  name: string,
+  email: string,
+  phone: string,
+  message: string
+): Promise<void> {
+  try {
+    const adminEmail = env.ADMIN_EMAIL;
+    if (!adminEmail || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      console.log("⚠️  Admin email not configured, skipping contact form notification");
+      return;
+    }
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px 30px; border-radius: 10px 10px 0 0; }
+          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+          .contact-box { background: #fff; border-left: 4px solid #667eea; padding: 20px; margin: 20px 0; border-radius: 5px; }
+          .detail-row { padding: 8px 0; border-bottom: 1px solid #eee; }
+          .message-box { background: #f8f9fa; padding: 20px; margin: 20px 0; border-radius: 5px; border: 1px solid #dee2e6; white-space: pre-wrap; }
+          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+          .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; color: white; background: #667eea; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h2 style="margin:0">📨 New Contact Form Submission</h2>
+            <p style="margin:5px 0 0">Someone has sent you a message</p>
+          </div>
+          <div class="content">
+            <p><span class="badge">NEW MESSAGE</span></p>
+
+            <div class="contact-box">
+              <div class="detail-row"><strong>Name:</strong> ${name}</div>
+              <div class="detail-row"><strong>Email:</strong> <a href="mailto:${email}">${email}</a></div>
+              <div class="detail-row"><strong>Phone:</strong> ${phone}</div>
+              <div class="detail-row"><strong>Received:</strong> ${new Date().toLocaleString()}</div>
+            </div>
+
+            <p><strong>Message:</strong></p>
+            <div class="message-box">${message}</div>
+
+            <p style="color:#666;font-size:14px;">You can reply directly to this message by responding to <a href="mailto:${email}">${email}</a></p>
+          </div>
+          <div class="footer">
+            <p>&copy; ${new Date().getFullYear()} ${emailConfig.appName} Contact Form</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    await transporter.sendMail({
+      from: emailConfig.from,
+      to: adminEmail,
+      replyTo: email, // Allow admin to reply directly
+      subject: `📨 New Contact Form: ${name} - ${emailConfig.appName}`,
+      html,
+      text: `New contact form submission\n\nName: ${name}\nEmail: ${email}\nPhone: ${phone}\nReceived: ${new Date().toLocaleString()}\n\nMessage:\n${message}\n\nReply to: ${email}`,
+    });
+
+    console.log(`✅ Contact form sent to admin from ${email}`);
+  } catch (error) {
+    console.error("Error sending contact form to admin:", error);
+  }
+}
+
+/**
  * Send email to admin when a new user signs up
  */
 export async function notifyAdminNewUserSignup(

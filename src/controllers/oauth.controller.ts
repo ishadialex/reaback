@@ -211,13 +211,14 @@ export async function googleCallback(req: Request, res: Response) {
 
         // Notify admin about new user signup
         setImmediate(() => {
+          console.log(`📧 Calling notifyAdminNewUserSignup for ${email} (OAuth)`);
           notifyAdminNewUserSignup(
             `${firstName} ${lastName}`,
             email,
             user!.id,
             referralCode,
             referrer ? `${referrer.firstName} ${referrer.lastName}` : undefined
-          ).catch((err) => console.error("Error sending admin signup notification:", err));
+          ).catch((err) => console.error("❌ Error sending admin signup notification (OAuth):", err));
         });
 
       // Process referral bonus if user was referred

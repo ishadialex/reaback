@@ -3,6 +3,7 @@ import { prisma } from "../config/database.js";
 import { success, error } from "../utils/response.js";
 import { hashPassword, comparePassword } from "../utils/password.js";
 import { sendAccountDeactivationEmail } from "../services/notification.service.js";
+import { subscribeToNewsletter, unsubscribeFromNewsletter } from "../services/newsletter.service.js";
 
 export async function getSettings(req: Request, res: Response) {
   try {
@@ -46,11 +47,47 @@ export async function updateSettings(req: Request, res: Response) {
       }
     }
 
+    // Get current settings to check if marketingEmails changed
+    const currentSettings = await prisma.userSettings.findUnique({
+      where: { userId: req.userId },
+    });
+
     const settings = await prisma.userSettings.upsert({
       where: { userId: req.userId },
       update: data,
       create: { userId: req.userId!, ...data },
     });
+
+    // Sync with newsletter if marketingEmails changed
+    if (req.body.marketingEmails !== undefined &&
+        currentSettings?.marketingEmails !== req.body.marketingEmails) {
+
+      // Get user info for newsletter
+      const user = await prisma.user.findUnique({
+        where: { id: req.userId },
+        select: { email: true, firstName: true, lastName: true },
+      });
+
+      if (user) {
+        if (req.body.marketingEmails === true) {
+          // Subscribe to newsletter
+          setImmediate(() => {
+            subscribeToNewsletter(
+              user.email,
+              user.firstName,
+              user.lastName,
+              "settings-page"
+            ).catch((err) => console.error("Error subscribing to newsletter:", err));
+          });
+        } else {
+          // Unsubscribe from newsletter
+          setImmediate(() => {
+            unsubscribeFromNewsletter(user.email)
+              .catch((err) => console.error("Error unsubscribing from newsletter:", err));
+          });
+        }
+      }
+    }
 
     return success(
       res,

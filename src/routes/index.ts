@@ -18,6 +18,8 @@ import referralRoutes from "./referral.routes.js";
 import fundRoutes from "./fund.routes.js";
 import paymentMethodsRoutes from "./paymentMethods.routes.js";
 import fundOperationsRoutes from "./fundOperations.routes.js";
+import newsletterRoutes from "./newsletter.routes.js";
+import contactRoutes from "./contact.routes.js";
 import adminTeamRoutes from "./admin/team.routes.js";
 import adminTestimonialsRoutes from "./admin/testimonials.routes.js";
 import adminInvestmentsRoutes from "./admin/investments.routes.js";
@@ -32,6 +34,8 @@ router.use("/", monitorRoutes);
 // Public routes (no auth)
 router.use("/public", publicRoutes);
 router.use("/pdf", pdfRoutes);
+router.use("/newsletter", newsletterRoutes);
+router.use("/contact", contactRoutes);
 
 // Auth routes
 router.use("/auth", authRoutes);
