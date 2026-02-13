@@ -5,7 +5,7 @@ import { prisma } from "../config/database.js";
 import { success, error } from "../utils/response.js";
 import { signAccessToken, signRefreshToken } from "../utils/jwt.js";
 import { env } from "../config/env.js";
-import { sendLoginAlert } from "../services/notification.service.js";
+import { sendLoginAlert, notifyAdminNewUserSignup, notifyAdminUserSignin, sendReferralSuccessNotification, sendWelcomeBonusNotification } from "../services/notification.service.js";
 import { getLocationString } from "../services/geolocation.service.js";
 import { setAccessTokenCookie, setRefreshTokenCookie } from "../utils/cookies.js";
 
@@ -209,6 +209,17 @@ export async function googleCallback(req: Request, res: Response) {
 
         console.log(`🆕 Created new user with Google account: ${email}`);
 
+        // Notify admin about new user signup
+        setImmediate(() => {
+          notifyAdminNewUserSignup(
+            `${firstName} ${lastName}`,
+            email,
+            user!.id,
+            referralCode,
+            referrer ? `${referrer.firstName} ${referrer.lastName}` : undefined
+          ).catch((err) => console.error("Error sending admin signup notification:", err));
+        });
+
       // Process referral bonus if user was referred
       if (referrer) {
         const REFERRAL_BONUS = 10;
@@ -262,8 +273,25 @@ export async function googleCallback(req: Request, res: Response) {
 
           console.log(`✅ Referral bonus credited: $${REFERRAL_BONUS} to both referrer and new user`);
 
-          // Send notifications asynchronously (import notification service functions if needed)
-          // Note: You may want to import and call sendReferralSuccessNotification and sendWelcomeBonusNotification here
+          // Send notifications asynchronously
+          setImmediate(() => {
+            sendReferralSuccessNotification(
+              referrer.id,
+              referrer.email,
+              `${firstName} ${lastName}`,
+              REFERRAL_BONUS
+            ).catch((err) => console.error("Error sending referral notification:", err));
+          });
+
+          setImmediate(() => {
+            sendWelcomeBonusNotification(
+              user!.id,
+              email,
+              firstName,
+              `${referrer.firstName} ${referrer.lastName}`,
+              REFERRAL_BONUS
+            ).catch((err) => console.error("Error sending welcome bonus notification:", err));
+          });
         } catch (refErr) {
           console.error("Error processing referral bonus:", refErr);
         }
@@ -310,6 +338,19 @@ export async function googleCallback(req: Request, res: Response) {
     // Send login alert notification
     setImmediate(() => {
       sendLoginAlert(user.id, user.email, device, browser, location, ipAddress).catch(() => {});
+    });
+
+    // Notify admin about user signin
+    setImmediate(() => {
+      notifyAdminUserSignin(
+        `${user.firstName} ${user.lastName}`,
+        user.email,
+        user.id,
+        device,
+        browser,
+        location,
+        ipAddress
+      ).catch((err) => console.error("Error sending admin signin notification:", err));
     });
 
     // Create temporary OAuth token for cross-domain exchange

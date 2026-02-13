@@ -10,7 +10,7 @@ import {
 } from "../utils/jwt.js";
 import { generateOtp, createOtp, verifyOtpCode } from "../utils/otp.js";
 import { sendOtpEmail, sendPasswordResetEmail } from "../services/email.service.js";
-import { sendLoginAlert, sendReferralSuccessNotification, sendWelcomeBonusNotification } from "../services/notification.service.js";
+import { sendLoginAlert, sendReferralSuccessNotification, sendWelcomeBonusNotification, notifyAdminNewUserSignup, notifyAdminUserSignin } from "../services/notification.service.js";
 import { getLocationString } from "../services/geolocation.service.js";
 import { env } from "../config/env.js";
 import { setAccessTokenCookie, setRefreshTokenCookie, clearAuthCookies, getRefreshTokenFromCookies } from "../utils/cookies.js";
@@ -281,6 +281,19 @@ export async function login(req: Request, res: Response) {
       sendLoginAlert(user.id, user.email, device, browser, location, ipAddress).catch(() => {});
     });
 
+    // Notify admin about user signin
+    setImmediate(() => {
+      notifyAdminUserSignin(
+        `${user.firstName} ${user.lastName}`,
+        user.email,
+        user.id,
+        device,
+        browser,
+        location,
+        ipAddress
+      ).catch((err) => console.error("Error sending admin signin notification:", err));
+    });
+
     console.log(`✅ Login successful: ${normalizedEmail} from ${location}`);
 
     // Set tokens as httpOnly cookies
@@ -410,6 +423,19 @@ export async function forceLogin(req: Request, res: Response) {
       sendLoginAlert(user.id, user.email, device, browser, location, ipAddress).catch(() => {});
     });
 
+    // Notify admin about user signin
+    setImmediate(() => {
+      notifyAdminUserSignin(
+        `${user.firstName} ${user.lastName}`,
+        user.email,
+        user.id,
+        device,
+        browser,
+        location,
+        ipAddress
+      ).catch((err) => console.error("Error sending admin signin notification:", err));
+    });
+
     console.log(`✅ Force login successful: ${normalizedEmail} from ${location} (${invalidatedSessions.count} device(s) logged out)`);
 
     // Set tokens as httpOnly cookies
@@ -470,6 +496,25 @@ export async function verifyOtp(req: Request, res: Response) {
     await prisma.user.update({
       where: { email: normalizedEmail },
       data: { emailVerified: true },
+    });
+
+    // Notify admin about new user signup
+    let referrer = null;
+    if (user.referredById) {
+      referrer = await prisma.user.findUnique({
+        where: { id: user.referredById },
+        select: { firstName: true, lastName: true, referralCode: true },
+      });
+    }
+
+    setImmediate(() => {
+      notifyAdminNewUserSignup(
+        `${user.firstName} ${user.lastName}`,
+        user.email,
+        user.id,
+        referrer?.referralCode,
+        referrer ? `${referrer.firstName} ${referrer.lastName}` : undefined
+      ).catch((err) => console.error("Error sending admin signup notification:", err));
     });
 
     // Process referral bonus if user was referred

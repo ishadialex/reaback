@@ -1301,3 +1301,152 @@ export async function sendWelcomeBonusNotification(
     console.error("Error sending welcome bonus notification:", error);
   }
 }
+
+/**
+ * Send email to admin when a new user signs up
+ */
+export async function notifyAdminNewUserSignup(
+  userName: string,
+  userEmail: string,
+  userId: string,
+  referralCode?: string,
+  referrerName?: string
+): Promise<void> {
+  try {
+    const adminEmail = env.ADMIN_EMAIL;
+    if (!adminEmail || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      console.log("⚠️  Admin email not configured, skipping new user signup notification");
+      return;
+    }
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 25px 30px; border-radius: 10px 10px 0 0; }
+          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+          .user-box { background: #fff; border-left: 4px solid #10b981; padding: 20px; margin: 20px 0; border-radius: 5px; }
+          .detail-row { padding: 8px 0; border-bottom: 1px solid #eee; }
+          .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; color: white; background: #10b981; }
+          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h2 style="margin:0">👤 New User Registration</h2>
+            <p style="margin:5px 0 0">A new user has joined the platform</p>
+          </div>
+          <div class="content">
+            <p><span class="badge">NEW USER</span></p>
+
+            <div class="user-box">
+              <div class="detail-row"><strong>Name:</strong> ${userName}</div>
+              <div class="detail-row"><strong>Email:</strong> ${userEmail}</div>
+              <div class="detail-row"><strong>User ID:</strong> ${userId}</div>
+              ${referralCode ? `<div class="detail-row"><strong>Referral Code Used:</strong> ${referralCode}</div>` : ""}
+              ${referrerName ? `<div class="detail-row"><strong>Referred By:</strong> ${referrerName}</div>` : ""}
+              <div class="detail-row"><strong>Registration Time:</strong> ${new Date().toLocaleString()}</div>
+            </div>
+
+            <p style="color:#666;font-size:14px">You can view and manage this user from the admin dashboard.</p>
+          </div>
+          <div class="footer">
+            <p>&copy; ${new Date().getFullYear()} ${emailConfig.appName} Admin Panel</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    await transporter.sendMail({
+      from: emailConfig.from,
+      to: adminEmail,
+      subject: `👤 New User Registration: ${userName} (${userEmail})`,
+      html,
+      text: `New user registration\n\nName: ${userName}\nEmail: ${userEmail}\nUser ID: ${userId}${referralCode ? `\nReferral Code: ${referralCode}` : ""}${referrerName ? `\nReferred By: ${referrerName}` : ""}\nRegistration Time: ${new Date().toLocaleString()}`,
+    });
+
+    console.log(`✅ Admin new user signup notification sent to ${adminEmail} for ${userEmail}`);
+  } catch (error) {
+    console.error("Error sending admin new user signup notification:", error);
+  }
+}
+
+/**
+ * Send email to admin when a user signs in
+ */
+export async function notifyAdminUserSignin(
+  userName: string,
+  userEmail: string,
+  userId: string,
+  device: string,
+  browser: string,
+  location: string,
+  ipAddress: string
+): Promise<void> {
+  try {
+    const adminEmail = env.ADMIN_EMAIL;
+    if (!adminEmail || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      console.log("⚠️  Admin email not configured, skipping user signin notification");
+      return;
+    }
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; padding: 25px 30px; border-radius: 10px 10px 0 0; }
+          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+          .signin-box { background: #fff; border-left: 4px solid #3b82f6; padding: 20px; margin: 20px 0; border-radius: 5px; }
+          .detail-row { padding: 8px 0; border-bottom: 1px solid #eee; }
+          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h2 style="margin:0">🔐 User Sign-In Activity</h2>
+            <p style="margin:5px 0 0">A user has signed into the platform</p>
+          </div>
+          <div class="content">
+            <div class="signin-box">
+              <div class="detail-row"><strong>User:</strong> ${userName}</div>
+              <div class="detail-row"><strong>Email:</strong> ${userEmail}</div>
+              <div class="detail-row"><strong>User ID:</strong> ${userId}</div>
+              <div class="detail-row"><strong>Device:</strong> ${device}</div>
+              <div class="detail-row"><strong>Browser:</strong> ${browser}</div>
+              <div class="detail-row"><strong>Location:</strong> ${location}</div>
+              <div class="detail-row"><strong>IP Address:</strong> ${ipAddress}</div>
+              <div class="detail-row"><strong>Sign-In Time:</strong> ${new Date().toLocaleString()}</div>
+            </div>
+
+            <p style="color:#666;font-size:14px">This is an automated notification for user sign-in activity monitoring.</p>
+          </div>
+          <div class="footer">
+            <p>&copy; ${new Date().getFullYear()} ${emailConfig.appName} Admin Panel</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    await transporter.sendMail({
+      from: emailConfig.from,
+      to: adminEmail,
+      subject: `🔐 User Sign-In: ${userName} (${userEmail}) from ${location}`,
+      html,
+      text: `User sign-in activity\n\nUser: ${userName}\nEmail: ${userEmail}\nUser ID: ${userId}\nDevice: ${device}\nBrowser: ${browser}\nLocation: ${location}\nIP Address: ${ipAddress}\nSign-In Time: ${new Date().toLocaleString()}`,
+    });
+
+    console.log(`✅ Admin user signin notification sent to ${adminEmail} for ${userEmail}`);
+  } catch (error) {
+    console.error("Error sending admin user signin notification:", error);
+  }
+}
