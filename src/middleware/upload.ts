@@ -29,6 +29,20 @@ const attachmentStorage = new CloudinaryStorage({
   } as any,
 });
 
+const teamStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: "alvarado/team",
+    allowed_formats: ["jpg", "jpeg", "png", "gif", "webp"],
+    transformation: [{ width: 600, height: 600, crop: "fill", gravity: "face" }],
+  } as any,
+});
+
+export const uploadTeamImage = multer({
+  storage: teamStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+}).single("image");
+
 export const uploadSingle = multer({
   storage: profileStorage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB

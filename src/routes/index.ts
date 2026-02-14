@@ -20,6 +20,7 @@ import paymentMethodsRoutes from "./paymentMethods.routes.js";
 import fundOperationsRoutes from "./fundOperations.routes.js";
 import newsletterRoutes from "./newsletter.routes.js";
 import contactRoutes from "./contact.routes.js";
+import reviewsRoutes from "./reviews.routes.js";
 import adminTeamRoutes from "./admin/team.routes.js";
 import adminTestimonialsRoutes from "./admin/testimonials.routes.js";
 import adminInvestmentsRoutes from "./admin/investments.routes.js";
@@ -56,6 +57,7 @@ router.use("/referrals", referralRoutes);
 router.use("/fund", fundRoutes);
 router.use("/payment-methods", paymentMethodsRoutes);
 router.use("/fund-operations", fundOperationsRoutes);
+router.use("/reviews", reviewsRoutes);
 
 // Admin routes (API key OR admin role required)
 router.use("/admin/team", adminTeamRoutes);

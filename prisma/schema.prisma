@@ -102,6 +102,7 @@ model User {
   referralsMade   Referral[]       @relation("ReferralsMade")
   referralsReceived Referral[]     @relation("ReferralsReceived")
   fundOperations  FundOperation[]
+  propertyReviews PropertyReview[]
 }
 
 model Account {
@@ -320,6 +321,28 @@ model Property {
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   userInvestments  UserInvestment[]
+  reviews          PropertyReview[]
+}
+
+// ──────────────────────────────────────────────
+// Property Reviews (logged-in users only)
+// ──────────────────────────────────────────────
+
+model PropertyReview {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  propertyId String   @db.ObjectId
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  userId     String   @db.ObjectId
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating     Int      // 1-5
+  title      String   @default("")
+  body       String
+  isApproved Boolean  @default(true) // auto-approved; admin can hide via approve endpoint
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([propertyId, userId]) // one review per user per property
+  @@index([propertyId, isApproved])
 }
 
 // ──────────────────────────────────────────────
