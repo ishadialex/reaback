@@ -101,6 +101,7 @@ function mapProperty(p: any) {
   return {
     id: p.id,
     title: p.title,
+    subject: p.subject || "",
     description: p.description,
     images: p.images?.length ? p.images : [],
     location: p.location,
@@ -124,5 +125,9 @@ function mapProperty(p: any) {
     features: p.features || [],
     riskLevel: p.riskLevel || "low",
     createdAt: p.createdAt,
+    managerName: p.managerName || "",
+    managerRole: p.managerRole || "",
+    managerPhone: p.managerPhone || "",
+    managerPhoto: p.managerPhoto || null,
   };
 }

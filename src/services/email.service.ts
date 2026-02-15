@@ -377,3 +377,407 @@ export async function sendPasswordResetEmail(
 
   console.log(`✅ Password reset email sent to ${email}`);
 }
+
+/**
+ * Send KYC approved email notification
+ * @param email - Recipient email address
+ * @param firstName - User's first name
+ */
+export async function sendKYCApprovedEmail(email: string, firstName: string) {
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+          line-height: 1.6;
+          color: #333;
+          margin: 0;
+          padding: 0;
+          background-color: #f4f4f4;
+        }
+        .container {
+          max-width: 600px;
+          margin: 40px auto;
+          background: #ffffff;
+          border-radius: 10px;
+          overflow: hidden;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+          background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+          padding: 40px 30px;
+          text-align: center;
+          color: white;
+        }
+        .header h1 {
+          margin: 0 0 8px 0;
+          font-size: 26px;
+          font-weight: 700;
+        }
+        .header p {
+          margin: 0;
+          font-size: 15px;
+          opacity: 0.9;
+        }
+        .checkmark {
+          width: 64px;
+          height: 64px;
+          background: rgba(255,255,255,0.2);
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin: 0 auto 16px;
+          font-size: 32px;
+        }
+        .content {
+          padding: 40px 30px;
+        }
+        .success-box {
+          background: #f0fdf4;
+          border: 1px solid #bbf7d0;
+          border-left: 4px solid #22c55e;
+          border-radius: 8px;
+          padding: 20px;
+          margin: 24px 0;
+        }
+        .success-box h3 {
+          margin: 0 0 8px 0;
+          color: #15803d;
+          font-size: 16px;
+        }
+        .success-box p {
+          margin: 0;
+          color: #166534;
+          font-size: 14px;
+        }
+        .features {
+          margin: 24px 0;
+        }
+        .feature-item {
+          display: flex;
+          align-items: flex-start;
+          margin-bottom: 16px;
+        }
+        .feature-icon {
+          color: #22c55e;
+          font-size: 18px;
+          margin-right: 12px;
+          flex-shrink: 0;
+          margin-top: 2px;
+        }
+        .cta-button {
+          display: block;
+          background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+          color: #ffffff !important;
+          text-decoration: none;
+          padding: 16px 32px;
+          border-radius: 8px;
+          font-weight: 600;
+          font-size: 16px;
+          text-align: center;
+          margin: 30px 0;
+        }
+        .footer {
+          background: #f8f9fa;
+          padding: 20px 30px;
+          text-align: center;
+          font-size: 13px;
+          color: #666;
+          border-top: 1px solid #dee2e6;
+        }
+        .footer a {
+          color: #22c55e;
+          text-decoration: none;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <div class="checkmark">✅</div>
+          <h1>KYC Verification Approved!</h1>
+          <p>Your identity has been successfully verified</p>
+        </div>
+        <div class="content">
+          <p>Hello ${firstName},</p>
+          <p>Great news! Your identity verification (KYC) has been reviewed and <strong>approved</strong>. You now have full access to all investment features on Alvarado.</p>
+
+          <div class="success-box">
+            <h3>✔ Verified Account</h3>
+            <p>Your account is now fully verified and you can start investing immediately.</p>
+          </div>
+
+          <div class="features">
+            <p><strong>What you can now do:</strong></p>
+            <div class="feature-item">
+              <span class="feature-icon">💼</span>
+              <span>Browse and invest in available properties</span>
+            </div>
+            <div class="feature-item">
+              <span class="feature-icon">💰</span>
+              <span>Add funds and start earning returns</span>
+            </div>
+            <div class="feature-item">
+              <span class="feature-icon">📊</span>
+              <span>Track your investment portfolio and performance</span>
+            </div>
+            <div class="feature-item">
+              <span class="feature-icon">🏡</span>
+              <span>Access exclusive pooled and individual investment opportunities</span>
+            </div>
+          </div>
+
+          <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard" class="cta-button">
+            Go to My Dashboard
+          </a>
+
+          <p style="font-size: 14px; color: #666;">If you have any questions, our support team is here to help.</p>
+          <p>Best regards,<br><strong>The Alvarado Team</strong></p>
+        </div>
+        <div class="footer">
+          <p>This is an automated message. Please do not reply to this email.</p>
+          <p>Need help? Contact us at <a href="mailto:support@alvarado.com">support@alvarado.com</a></p>
+          <p>&copy; ${new Date().getFullYear()} Alvarado. All rights reserved.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const textContent = `
+Hello ${firstName},
+
+Great news! Your KYC (identity verification) has been approved.
+
+Your Alvarado account is now fully verified. You can now:
+- Browse and invest in available properties
+- Add funds and start earning returns
+- Track your investment portfolio
+- Access exclusive investment opportunities
+
+Visit your dashboard to get started: ${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard
+
+Best regards,
+The Alvarado Team
+---
+This is an automated message. Please do not reply.
+Need help? Contact us at support@alvarado.com
+  `;
+
+  try {
+    const info = await transporter.sendMail({
+      from: emailConfig.from,
+      to: email,
+      subject: "Your KYC Verification Has Been Approved ✅ - Alvarado",
+      text: textContent,
+      html: htmlContent,
+    });
+    console.log(`✅ KYC approval email sent to ${email}: ${info.messageId}`);
+  } catch (err) {
+    console.error(`❌ Failed to send KYC approval email to ${email}:`, err);
+    // Don't throw - email failure shouldn't block the approval
+  }
+}
+
+/**
+ * Send KYC rejected email notification
+ * @param email - Recipient email address
+ * @param firstName - User's first name
+ * @param rejectionReason - Reason for rejection
+ */
+export async function sendKYCRejectedEmail(email: string, firstName: string, rejectionReason: string) {
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+          line-height: 1.6;
+          color: #333;
+          margin: 0;
+          padding: 0;
+          background-color: #f4f4f4;
+        }
+        .container {
+          max-width: 600px;
+          margin: 40px auto;
+          background: #ffffff;
+          border-radius: 10px;
+          overflow: hidden;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+          background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+          padding: 40px 30px;
+          text-align: center;
+          color: white;
+        }
+        .header h1 {
+          margin: 0 0 8px 0;
+          font-size: 26px;
+          font-weight: 700;
+        }
+        .header p {
+          margin: 0;
+          font-size: 15px;
+          opacity: 0.9;
+        }
+        .content {
+          padding: 40px 30px;
+        }
+        .reason-box {
+          background: #fef2f2;
+          border: 1px solid #fecaca;
+          border-left: 4px solid #ef4444;
+          border-radius: 8px;
+          padding: 20px;
+          margin: 24px 0;
+        }
+        .reason-box h3 {
+          margin: 0 0 8px 0;
+          color: #b91c1c;
+          font-size: 15px;
+        }
+        .reason-box p {
+          margin: 0;
+          color: #7f1d1d;
+          font-size: 14px;
+        }
+        .steps {
+          margin: 24px 0;
+        }
+        .step-item {
+          display: flex;
+          align-items: flex-start;
+          margin-bottom: 14px;
+        }
+        .step-num {
+          background: #ef4444;
+          color: white;
+          border-radius: 50%;
+          width: 24px;
+          height: 24px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 12px;
+          font-weight: bold;
+          margin-right: 12px;
+          flex-shrink: 0;
+        }
+        .cta-button {
+          display: block;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: #ffffff !important;
+          text-decoration: none;
+          padding: 16px 32px;
+          border-radius: 8px;
+          font-weight: 600;
+          font-size: 16px;
+          text-align: center;
+          margin: 30px 0;
+        }
+        .footer {
+          background: #f8f9fa;
+          padding: 20px 30px;
+          text-align: center;
+          font-size: 13px;
+          color: #666;
+          border-top: 1px solid #dee2e6;
+        }
+        .footer a {
+          color: #667eea;
+          text-decoration: none;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>❌ KYC Verification Unsuccessful</h1>
+          <p>Your identity verification requires attention</p>
+        </div>
+        <div class="content">
+          <p>Hello ${firstName},</p>
+          <p>We've reviewed your identity verification (KYC) submission and unfortunately it could not be approved at this time.</p>
+
+          <div class="reason-box">
+            <h3>Reason for rejection:</h3>
+            <p>${rejectionReason}</p>
+          </div>
+
+          <div class="steps">
+            <p><strong>What to do next:</strong></p>
+            <div class="step-item">
+              <div class="step-num">1</div>
+              <span>Review the rejection reason above carefully</span>
+            </div>
+            <div class="step-item">
+              <div class="step-num">2</div>
+              <span>Prepare the correct documents (ensure they are clear, valid, and not expired)</span>
+            </div>
+            <div class="step-item">
+              <div class="step-num">3</div>
+              <span>Re-submit your KYC documents from your dashboard</span>
+            </div>
+          </div>
+
+          <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/security/kyc" class="cta-button">
+            Re-submit KYC Documents
+          </a>
+
+          <p style="font-size: 14px; color: #666;">If you believe this was a mistake or need assistance, please contact our support team.</p>
+          <p>Best regards,<br><strong>The Alvarado Team</strong></p>
+        </div>
+        <div class="footer">
+          <p>This is an automated message. Please do not reply to this email.</p>
+          <p>Need help? Contact us at <a href="mailto:support@alvarado.com">support@alvarado.com</a></p>
+          <p>&copy; ${new Date().getFullYear()} Alvarado. All rights reserved.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const textContent = `
+Hello ${firstName},
+
+Your KYC (identity verification) submission was not approved.
+
+Reason: ${rejectionReason}
+
+What to do next:
+1. Review the rejection reason above
+2. Prepare the correct, valid documents
+3. Re-submit from your dashboard: ${process.env.FRONTEND_URL || 'http://localhost:3000'}/dashboard/security/kyc
+
+If you need help, contact us at support@alvarado.com
+
+Best regards,
+The Alvarado Team
+---
+This is an automated message. Please do not reply.
+  `;
+
+  try {
+    const info = await transporter.sendMail({
+      from: emailConfig.from,
+      to: email,
+      subject: "KYC Verification Update - Action Required - Alvarado",
+      text: textContent,
+      html: htmlContent,
+    });
+    console.log(`✅ KYC rejection email sent to ${email}: ${info.messageId}`);
+  } catch (err) {
+    console.error(`❌ Failed to send KYC rejection email to ${email}:`, err);
+    // Don't throw - email failure shouldn't block the rejection
+  }
+}

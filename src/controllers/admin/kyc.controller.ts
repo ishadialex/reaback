@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { prisma } from "../../config/database.js";
 import { success, error } from "../../utils/response.js";
+import { sendKYCApprovedEmail, sendKYCRejectedEmail } from "../../services/email.service.js";
 
 /**
  * Get all KYC submissions (with filtering and pagination)
@@ -102,7 +103,7 @@ export async function getKYCSubmission(req: Request, res: Response) {
 export async function approveKYC(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    const { adminNotes } = req.body;
+    const { adminNotes } = req.body || {};
     const adminId = req.userId!;
 
     // Find KYC submission
@@ -149,7 +150,11 @@ export async function approveKYC(req: Request, res: Response) {
 
     console.log(`✅ KYC approved for user: ${updatedKYC.user.email} by admin: ${adminId}`);
 
-    // TODO: Send email notification to user about KYC approval
+    // Send email notification to user about KYC approval (non-blocking)
+    setImmediate(() => {
+      sendKYCApprovedEmail(updatedKYC.user.email, updatedKYC.user.firstName)
+        .catch((err) => console.error("Error sending KYC approval email:", err));
+    });
 
     return success(res, { kyc: updatedKYC }, "KYC approved successfully");
   } catch (err) {
@@ -165,7 +170,7 @@ export async function approveKYC(req: Request, res: Response) {
 export async function rejectKYC(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    const { rejectionReason, adminNotes } = req.body;
+    const { rejectionReason, adminNotes } = req.body || {};
     const adminId = req.userId!;
 
     if (!rejectionReason) {
@@ -212,7 +217,11 @@ export async function rejectKYC(req: Request, res: Response) {
 
     console.log(`❌ KYC rejected for user: ${updatedKYC.user.email} by admin: ${adminId}`);
 
-    // TODO: Send email notification to user about KYC rejection with reason
+    // Send email notification to user about KYC rejection with reason (non-blocking)
+    setImmediate(() => {
+      sendKYCRejectedEmail(updatedKYC.user.email, updatedKYC.user.firstName, rejectionReason)
+        .catch((err) => console.error("Error sending KYC rejection email:", err));
+    });
 
     return success(res, { kyc: updatedKYC }, "KYC rejected");
   } catch (err) {

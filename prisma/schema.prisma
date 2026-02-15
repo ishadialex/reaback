@@ -298,6 +298,7 @@ model UserInvestment {
 model Property {
   id               String           @id @default(auto()) @map("_id") @db.ObjectId
   title            String
+  subject          String           @default("")
   images           String[]         @default([])
   location         String
   price            Float            @default(0)
@@ -318,6 +319,10 @@ model Property {
   sqft             Int              @default(0)
   description      String           @default("")
   features         String[]         @default([])
+  managerName      String           @default("")
+  managerRole      String           @default("")
+  managerPhone     String           @default("")
+  managerPhoto     String?
   investmentStatus String           @default("available") // available | fully-funded | coming-soon | closed
   riskLevel        String           @default("low")        // low | medium | high
   isActive         Boolean          @default(true)

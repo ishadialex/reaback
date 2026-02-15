@@ -28,6 +28,7 @@ function parsePropertyBody(body: any) {
 
   // Strings
   if (body.title) data.title = body.title;
+  if (body.subject) data.subject = body.subject;
   if (body.location) data.location = body.location;
   if (body.description) data.description = body.description;
   if (body.type) data.type = body.type;
@@ -35,6 +36,9 @@ function parsePropertyBody(body: any) {
   if (body.investmentType) data.investmentType = body.investmentType;
   if (body.investmentStatus) data.investmentStatus = body.investmentStatus;
   if (body.riskLevel) data.riskLevel = body.riskLevel;
+  if (body.managerName) data.managerName = body.managerName;
+  if (body.managerRole) data.managerRole = body.managerRole;
+  if (body.managerPhone) data.managerPhone = body.managerPhone;
 
   // Numbers (floats)
   if (body.price) data.price = Number(body.price);
@@ -150,18 +154,30 @@ export async function getOne(req: Request, res: Response) {
 
 export async function create(req: Request, res: Response) {
   try {
-    const files = req.files as Express.Multer.File[];
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
 
-    if (!files || files.length < 4) {
-      return error(res, "Minimum 4 images required", 400);
+    // Extract property images
+    const propertyImages = files?.images || [];
+    if (propertyImages.length < 4) {
+      return error(res, "Minimum 4 property images required", 400);
     }
-    if (files.length > 20) {
-      return error(res, "Maximum 20 images allowed", 400);
+    if (propertyImages.length > 20) {
+      return error(res, "Maximum 20 property images allowed", 400);
     }
 
     // Cloudinary returns URLs in file.path
-    const images = files.map((f) => f.path);
+    const images = propertyImages.map((f) => f.path);
+
+    // Extract manager photo if provided
+    const managerPhotoFile = files?.managerPhoto?.[0];
+    const managerPhoto = managerPhotoFile ? managerPhotoFile.path : null;
+
     const data = parsePropertyBody(req.body);
+
+    // Add manager photo to data if provided
+    if (managerPhoto) {
+      data.managerPhoto = managerPhoto;
+    }
 
     // Validate required fields
     if (!data.title || !data.location || !data.price || !data.minInvestment ||
@@ -206,17 +222,24 @@ export async function update(req: Request, res: Response) {
       return error(res, validationError, 400);
     }
 
-    // If new images uploaded, use them; otherwise keep existing
-    const files = req.files as Express.Multer.File[] | undefined;
-    if (files && files.length > 0) {
-      if (files.length < 4) {
-        return error(res, "Minimum 4 images required", 400);
+    // Handle file uploads
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+
+    // If new property images uploaded, use them; otherwise keep existing
+    if (files?.images && files.images.length > 0) {
+      if (files.images.length < 4) {
+        return error(res, "Minimum 4 property images required", 400);
       }
-      if (files.length > 20) {
-        return error(res, "Maximum 20 images allowed", 400);
+      if (files.images.length > 20) {
+        return error(res, "Maximum 20 property images allowed", 400);
       }
       // Cloudinary returns URLs in file.path
-      data.images = files.map((f) => f.path);
+      data.images = files.images.map((f) => f.path);
+    }
+
+    // If new manager photo uploaded, use it
+    if (files?.managerPhoto?.[0]) {
+      data.managerPhoto = files.managerPhoto[0].path;
     }
 
     const property = await prisma.property.update({
