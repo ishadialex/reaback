@@ -92,6 +92,7 @@ model User {
   sessions        Session[]
   oAuthTokens     OAuthToken[]
   settings        UserSettings?
+  kyc             KYC?
   tickets         SupportTicket[]
   ticketMessages  TicketMessage[]
   attachments     FileAttachment[]
@@ -456,4 +457,50 @@ model NewsletterSubscriber {
   updatedAt     DateTime @updatedAt
 
   @@index([isSubscribed])
+}
+
+// ──────────────────────────────────────────────
+// KYC (Know Your Customer) Verification
+// ──────────────────────────────────────────────
+
+model KYC {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId            String    @unique @db.ObjectId
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Personal Information
+  fullName          String    @default("")
+  dateOfBirth       String    @default("")
+  nationality       String    @default("")
+  address           String    @default("")
+  city              String    @default("")
+  state             String    @default("")
+  postalCode        String    @default("")
+  country           String    @default("")
+
+  // Document Upload URLs
+  idFrontUrl        String?   // Government ID front
+  idBackUrl         String?   // Government ID back
+  proofOfAddressUrl String?   // Utility bill, bank statement, etc.
+  selfieUrl         String?   // Selfie with ID for verification
+
+  // Document Details
+  documentType      String    @default("") // passport | drivers_license | national_id
+  documentNumber    String    @default("")
+
+  // Status & Review
+  status            String    @default("not_submitted") // not_submitted | pending | approved | rejected
+  submittedAt       DateTime?
+  reviewedAt        DateTime?
+  reviewedBy        String?   // Admin user ID who reviewed
+
+  // Admin Notes & Rejection
+  adminNotes        String    @default("")
+  rejectionReason   String    @default("")
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([status])
+  @@index([userId, status])
 }

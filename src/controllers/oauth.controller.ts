@@ -125,6 +125,16 @@ export async function googleCallback(req: Request, res: Response) {
       // Try to fetch the associated user
       user = await prisma.user.findUnique({
         where: { id: account.userId },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          profilePhoto: true,
+          emailVerified: true,
+          twoFactorEnabled: true,
+          requireTwoFactorLogin: true,
+        },
       });
 
       if (user) {
@@ -139,6 +149,16 @@ export async function googleCallback(req: Request, res: Response) {
           user = await prisma.user.update({
             where: { id: user.id },
             data: { profilePhoto, emailVerified: true },
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              profilePhoto: true,
+              emailVerified: true,
+              twoFactorEnabled: true,
+              requireTwoFactorLogin: true,
+            },
           });
         }
       } else {
@@ -152,7 +172,16 @@ export async function googleCallback(req: Request, res: Response) {
       // 2. Check if User exists with this email
       user = await prisma.user.findUnique({
         where: { email },
-        include: { accounts: true },
+        select: {
+          id: true,
+          email: true,
+          firstName: true,
+          lastName: true,
+          profilePhoto: true,
+          emailVerified: true,
+          twoFactorEnabled: true,
+          requireTwoFactorLogin: true,
+        },
       });
 
       if (user) {
@@ -170,6 +199,16 @@ export async function googleCallback(req: Request, res: Response) {
           user = await prisma.user.update({
             where: { id: user.id },
             data: { profilePhoto, emailVerified: true },
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              profilePhoto: true,
+              emailVerified: true,
+              twoFactorEnabled: true,
+              requireTwoFactorLogin: true,
+            },
           });
         }
 
@@ -336,23 +375,27 @@ export async function googleCallback(req: Request, res: Response) {
       },
     });
 
-    // Send login alert notification
-    setImmediate(() => {
-      sendLoginAlert(user.id, user.email, device, browser, location, ipAddress).catch(() => {});
-    });
+    // Send login alert notification (skip if 2FA is required - will send after 2FA verification)
+    if (!user.requireTwoFactorLogin || !user.twoFactorEnabled) {
+      setImmediate(() => {
+        sendLoginAlert(user.id, user.email, device, browser, location, ipAddress).catch(() => {});
+      });
 
-    // Notify admin about user signin
-    setImmediate(() => {
-      notifyAdminUserSignin(
-        `${user.firstName} ${user.lastName}`,
-        user.email,
-        user.id,
-        device,
-        browser,
-        location,
-        ipAddress
-      ).catch((err) => console.error("Error sending admin signin notification:", err));
-    });
+      // Notify admin about user signin
+      setImmediate(() => {
+        notifyAdminUserSignin(
+          `${user.firstName} ${user.lastName}`,
+          user.email,
+          user.id,
+          device,
+          browser,
+          location,
+          ipAddress
+        ).catch((err) => console.error("Error sending admin signin notification:", err));
+      });
+    } else {
+      console.log(`🔐 Login notifications deferred until 2FA verification for: ${user.email}`);
+    }
 
     // Create temporary OAuth token for cross-domain exchange
     // This token will be exchanged for real httpOnly cookies via the frontend rewrite proxy

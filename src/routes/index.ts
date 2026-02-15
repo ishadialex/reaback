@@ -26,6 +26,8 @@ import adminTestimonialsRoutes from "./admin/testimonials.routes.js";
 import adminInvestmentsRoutes from "./admin/investments.routes.js";
 import adminPropertiesRoutes from "./admin/properties.routes.js";
 import adminUsersRoutes from "./admin/users.routes.js";
+import adminKycRoutes from "./admin/kyc.routes.js";
+import kycRoutes from "./kyc.routes.js";
 
 const router = Router();
 
@@ -47,6 +49,7 @@ router.use("/profile", profileRoutes);
 router.use("/settings", settingsRoutes);
 router.use("/sessions", sessionsRoutes);
 router.use("/2fa", twoFactorRoutes);
+router.use("/kyc", kycRoutes);
 router.use("/support", supportRoutes);
 router.use("/transfers", transferRoutes);
 router.use("/transactions", transactionsRoutes);
@@ -65,5 +68,6 @@ router.use("/admin/testimonials", adminTestimonialsRoutes);
 router.use("/admin/investments", adminInvestmentsRoutes);
 router.use("/admin/properties", adminPropertiesRoutes);
 router.use("/admin/users", adminUsersRoutes);
+router.use("/admin/kyc", adminKycRoutes);
 
 export default router;

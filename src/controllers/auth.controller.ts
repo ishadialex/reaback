@@ -483,8 +483,102 @@ export async function forceLogin(req: Request, res: Response) {
 
 export async function verify2FALogin(req: Request, res: Response) {
   try {
-    const { email, password, code, forceLogin: isForceLogin } = req.body;
+    const { email, password, code, oauthToken, forceLogin: isForceLogin } = req.body;
 
+    // Handle OAuth-based 2FA verification
+    if (oauthToken) {
+      if (!code) {
+        return error(res, "2FA code is required", 400);
+      }
+
+      // Find the OAuth token
+      const oAuthTokenRecord = await prisma.oAuthToken.findUnique({
+        where: { token: oauthToken },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              profilePhoto: true,
+              twoFactorEnabled: true,
+            },
+          },
+        },
+      });
+
+      if (!oAuthTokenRecord) {
+        return error(res, "Invalid or expired OAuth token", 401);
+      }
+
+      // Check if token has expired
+      if (new Date() > oAuthTokenRecord.expiresAt) {
+        await prisma.oAuthToken.delete({ where: { token: oauthToken } });
+        return error(res, "OAuth token has expired", 401);
+      }
+
+      // Verify 2FA code
+      const is2FAValid = await verify2FACode(oAuthTokenRecord.user.id, code);
+      if (!is2FAValid) {
+        return error(res, "Invalid 2FA code. Please try again.", 401);
+      }
+
+      // 2FA verified - set cookies and complete login
+      setAccessTokenCookie(res, oAuthTokenRecord.accessToken);
+      setRefreshTokenCookie(res, oAuthTokenRecord.refreshToken);
+
+      // Delete the temporary OAuth token
+      await prisma.oAuthToken.delete({ where: { token: oauthToken } });
+
+      console.log(`✅ OAuth 2FA login successful: ${oAuthTokenRecord.user.email}`);
+
+      // Send login notification (deferred from OAuth callback)
+      // Fetch the session to get device, browser, location, ipAddress
+      const session = await prisma.session.findFirst({
+        where: {
+          token: oAuthTokenRecord.refreshToken,
+          userId: oAuthTokenRecord.user.id,
+        },
+        select: {
+          device: true,
+          browser: true,
+          location: true,
+          ipAddress: true,
+        },
+      });
+
+      if (session) {
+        setImmediate(() => {
+          sendLoginAlert(
+            oAuthTokenRecord.user.id,
+            oAuthTokenRecord.user.email,
+            session.device,
+            session.browser,
+            session.location,
+            session.ipAddress
+          ).catch(() => {});
+        });
+
+        setImmediate(() => {
+          notifyAdminUserSignin(
+            `${oAuthTokenRecord.user.firstName} ${oAuthTokenRecord.user.lastName}`,
+            oAuthTokenRecord.user.email,
+            oAuthTokenRecord.user.id,
+            session.device,
+            session.browser,
+            session.location,
+            session.ipAddress
+          ).catch((err) => console.error("Error sending admin signin notification:", err));
+        });
+      }
+
+      return success(res, {
+        user: oAuthTokenRecord.user,
+      }, "Authentication successful");
+    }
+
+    // Handle credentials-based 2FA verification
     if (!email || !password || !code) {
       return error(res, "Email, password, and 2FA code are required", 400);
     }
@@ -1244,6 +1338,8 @@ export async function exchangeOAuthToken(req: Request, res: Response) {
             profilePhoto: true,
             referralCode: true,
             emailVerified: true,
+            twoFactorEnabled: true,
+            requireTwoFactorLogin: true,
           },
         },
       },
@@ -1258,6 +1354,18 @@ export async function exchangeOAuthToken(req: Request, res: Response) {
       // Delete expired token
       await prisma.oAuthToken.delete({ where: { token } });
       return error(res, "Token has expired", 401);
+    }
+
+    // Check if 2FA is required for login
+    if (oAuthToken.user.requireTwoFactorLogin && oAuthToken.user.twoFactorEnabled) {
+      console.log(`🔐 2FA required for OAuth login: ${oAuthToken.user.email}`);
+      return res.status(200).json({
+        success: true,
+        requiresTwoFactor: true,
+        message: "Two-factor authentication code required",
+        email: oAuthToken.user.email,
+        oauthToken: token, // Pass token back so frontend can use it for 2FA verification
+      });
     }
 
     // Set httpOnly cookies with the stored tokens

@@ -38,6 +38,15 @@ const teamStorage = new CloudinaryStorage({
   } as any,
 });
 
+const kycStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: "alvarado/kyc-documents",
+    allowed_formats: ["jpg", "jpeg", "png", "pdf"],
+    resource_type: "auto",
+  } as any,
+});
+
 export const uploadTeamImage = multer({
   storage: teamStorage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
@@ -55,5 +64,10 @@ export const uploadMultiple = multer({
 
 export const uploadAttachment = multer({
   storage: attachmentStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+}).single("file");
+
+export const uploadKYCDocument = multer({
+  storage: kycStorage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
 }).single("file");
