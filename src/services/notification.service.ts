@@ -1611,3 +1611,105 @@ export async function notifyAdminUserSignin(
     console.error("Error sending admin user signin notification:", error);
   }
 }
+
+/**
+ * Send email to admin when a user submits KYC verification
+ */
+export async function notifyAdminKYCSubmission(
+  userName: string,
+  userEmail: string,
+  userId: string,
+  kycId: string,
+  documentType: string,
+  nationality: string
+): Promise<void> {
+  try {
+    const adminEmail = env.ADMIN_EMAIL;
+    if (!adminEmail || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+      console.log("⚠️  Admin email not configured, skipping KYC submission notification");
+      return;
+    }
+
+    const docTypeLabels: Record<string, string> = {
+      passport: "Passport",
+      drivers_license: "Driver's License",
+      national_id: "National ID Card",
+    };
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; padding: 25px 30px; border-radius: 10px 10px 0 0; }
+          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+          .kyc-box { background: #fff; border-left: 4px solid #f59e0b; padding: 20px; margin: 20px 0; border-radius: 5px; }
+          .detail-row { padding: 8px 0; border-bottom: 1px solid #eee; }
+          .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; color: white; background: #f59e0b; }
+          .action-box { background: #fffbeb; border: 1px solid #fbbf24; padding: 15px; margin: 20px 0; border-radius: 8px; }
+          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
+          .btn { display: inline-block; background: #f59e0b; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 10px 0; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h2 style="margin:0">🆔 New KYC Verification Submitted</h2>
+            <p style="margin:5px 0 0">Action required: Review and verify documents</p>
+          </div>
+          <div class="content">
+            <p><span class="badge">PENDING REVIEW</span></p>
+
+            <p>A user has submitted their KYC verification documents and is awaiting approval.</p>
+
+            <div class="kyc-box">
+              <div class="detail-row"><strong>User:</strong> ${userName}</div>
+              <div class="detail-row"><strong>Email:</strong> ${userEmail}</div>
+              <div class="detail-row"><strong>User ID:</strong> ${userId}</div>
+              <div class="detail-row"><strong>KYC ID:</strong> ${kycId}</div>
+              <div class="detail-row"><strong>Document Type:</strong> ${docTypeLabels[documentType] || documentType}</div>
+              <div class="detail-row"><strong>Nationality:</strong> ${nationality}</div>
+              <div class="detail-row"><strong>Submitted:</strong> ${new Date().toLocaleString()}</div>
+            </div>
+
+            <div class="action-box">
+              <strong>⚡ Action Required:</strong>
+              <ul style="margin:10px 0;padding-left:20px">
+                <li>Review uploaded documents (ID, proof of address, selfie)</li>
+                <li>Verify information matches the documents</li>
+                <li>Approve or reject the KYC submission</li>
+                <li>Provide feedback if rejected</li>
+              </ul>
+            </div>
+
+            <p style="text-align: center;">
+              <a href="${emailConfig.appUrl}/admin/kyc" class="btn">
+                Review KYC Submission
+              </a>
+            </p>
+
+            <p style="color:#666;font-size:13px">Please review this submission within 24-48 hours to maintain service quality.</p>
+          </div>
+          <div class="footer">
+            <p>&copy; ${new Date().getFullYear()} ${emailConfig.appName} Admin Panel</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    await transporter.sendMail({
+      from: emailConfig.from,
+      to: adminEmail,
+      subject: `🆔 New KYC Verification: ${userName} (${userEmail})`,
+      html,
+      text: `New KYC verification submitted\n\nUser: ${userName}\nEmail: ${userEmail}\nUser ID: ${userId}\nKYC ID: ${kycId}\nDocument Type: ${docTypeLabels[documentType] || documentType}\nNationality: ${nationality}\nSubmitted: ${new Date().toLocaleString()}\n\nAction required: Review and verify the submitted documents.\n\nReview at: ${emailConfig.appUrl}/admin/kyc`,
+    });
+
+    console.log(`✅ Admin KYC submission notification sent to ${adminEmail} for ${userEmail}`);
+  } catch (error) {
+    console.error("Error sending admin KYC submission notification:", error);
+  }
+}

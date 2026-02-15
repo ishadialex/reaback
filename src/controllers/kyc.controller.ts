@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { prisma } from "../config/database.js";
 import { success, error } from "../utils/response.js";
+import { notifyAdminKYCSubmission } from "../services/notification.service.js";
 
 interface MulterFile {
   path: string;
@@ -117,8 +118,13 @@ export async function submitKYC(req: Request, res: Response) {
       return error(res, "Document type and number are required", 400);
     }
 
-    if (!idFrontUrl || !idBackUrl || !proofOfAddressUrl || !selfieUrl) {
-      return error(res, "All document uploads are required (ID front, ID back, proof of address, selfie)", 400);
+    if (!idFrontUrl || !proofOfAddressUrl || !selfieUrl) {
+      return error(res, "All document uploads are required (ID front, proof of address, selfie)", 400);
+    }
+
+    // ID back is only required for driver's licenses
+    if (documentType === "drivers_license" && !idBackUrl) {
+      return error(res, "Driver's license requires both front and back images", 400);
     }
 
     // Check if KYC record exists
@@ -186,13 +192,26 @@ export async function submitKYC(req: Request, res: Response) {
       },
     });
 
-    // Update user's kycStatus
-    await prisma.user.update({
+    // Update user's kycStatus and get user email for notification
+    const user = await prisma.user.update({
       where: { id: userId },
       data: { kycStatus: "pending" },
+      select: { email: true },
     });
 
     console.log(`📝 KYC submitted for user: ${userId}`);
+
+    // Send admin notification asynchronously
+    setImmediate(() => {
+      notifyAdminKYCSubmission(
+        fullName,
+        user.email,
+        userId,
+        kyc.id,
+        documentType,
+        nationality
+      ).catch((err) => console.error("Error sending KYC admin notification:", err));
+    });
 
     return success(res, { kyc }, "KYC documents submitted successfully. Our team will review your submission shortly.");
   } catch (err) {
