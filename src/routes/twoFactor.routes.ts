@@ -6,6 +6,7 @@ import {
   disable2FA,
   regenerateBackupCodes,
   get2FAStatus,
+  requireLogin2FA,
 } from "../controllers/twoFactor.controller.js";
 
 const router = Router();
@@ -27,5 +28,8 @@ router.post("/disable", disable2FA);
 
 // Regenerate backup codes (requires password)
 router.post("/backup-codes/regenerate", regenerateBackupCodes);
+
+// Toggle "Require 2FA on login"
+router.post("/require-login", requireLogin2FA);
 
 export default router;

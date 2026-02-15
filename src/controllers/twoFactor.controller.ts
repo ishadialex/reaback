@@ -202,6 +202,7 @@ export async function disable2FA(req: Request, res: Response) {
         twoFactorEnabled: false,
         twoFactorSecret: null,
         backupCodes: [],
+        requireTwoFactorLogin: false,
       },
     });
 
@@ -340,6 +341,51 @@ export async function regenerateBackupCodes(req: Request, res: Response) {
 }
 
 /**
+ * Toggle "Require 2FA on login" setting
+ */
+export async function requireLogin2FA(req: Request, res: Response) {
+  try {
+    const userId = req.userId;
+    const { require: requireFlag } = req.body;
+
+    if (!userId) {
+      return error(res, "Unauthorized", 401);
+    }
+
+    if (typeof requireFlag !== "boolean") {
+      return error(res, "Invalid request. 'require' must be a boolean.", 400);
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { twoFactorEnabled: true, email: true },
+    });
+
+    if (!user) {
+      return error(res, "User not found", 404);
+    }
+
+    if (!user.twoFactorEnabled) {
+      return error(res, "You must enable 2FA before requiring it for login.", 400);
+    }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { requireTwoFactorLogin: requireFlag },
+    });
+
+    console.log(`🔐 2FA login requirement ${requireFlag ? "enabled" : "disabled"} for user: ${user.email}`);
+
+    return success(res, {
+      requireTwoFactorLogin: requireFlag,
+    }, `Two-factor authentication is now ${requireFlag ? "required" : "optional"} for login`);
+  } catch (err) {
+    console.error("requireLogin2FA error:", err);
+    return error(res, "Failed to update 2FA login requirement", 500);
+  }
+}
+
+/**
  * Get 2FA status
  */
 export async function get2FAStatus(req: Request, res: Response) {
@@ -354,6 +400,7 @@ export async function get2FAStatus(req: Request, res: Response) {
       where: { id: userId },
       select: {
         twoFactorEnabled: true,
+        requireTwoFactorLogin: true,
         backupCodes: true,
       },
     });
@@ -364,6 +411,7 @@ export async function get2FAStatus(req: Request, res: Response) {
 
     return success(res, {
       enabled: user.twoFactorEnabled,
+      requireTwoFactorLogin: user.requireTwoFactorLogin,
       backupCodesCount: user.backupCodes.length,
     });
   } catch (err) {

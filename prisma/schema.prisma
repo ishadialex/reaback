@@ -74,9 +74,10 @@ model User {
   occupation       String    @default("")
   role             String    @default("user") // user | admin | superadmin
   emailVerified    Boolean   @default(false)
-  twoFactorEnabled Boolean   @default(false)
-  twoFactorSecret  String?
-  backupCodes      String[]  @default([])
+  twoFactorEnabled      Boolean   @default(false)
+  twoFactorSecret       String?
+  backupCodes           String[]  @default([])
+  requireTwoFactorLogin Boolean   @default(false)
   kycStatus        String    @default("none") // none | pending | verified | rejected
   balance          Float     @default(0)
   referralCode     String    @unique
@@ -130,18 +131,20 @@ model Account {
 }
 
 model Session {
-  id         String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId     String   @db.ObjectId
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  token      String   @unique
-  device     String   @default("Unknown")
-  browser    String   @default("Unknown")
-  ipAddress  String   @default("")
-  location   String   @default("Unknown")
-  lastActive DateTime @default(now())
-  expiresAt  DateTime
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String    @db.ObjectId
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token          String    @unique
+  previousToken  String?
+  tokenRotatedAt DateTime?
+  device         String    @default("Unknown")
+  browser        String    @default("Unknown")
+  ipAddress      String    @default("")
+  location       String    @default("Unknown")
+  lastActive     DateTime  @default(now())
+  expiresAt      DateTime
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
 }
 
 model Otp {

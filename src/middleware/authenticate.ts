@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
+import jwt from "jsonwebtoken";
 import { verifyAccessToken } from "../utils/jwt.js";
-import { error } from "../utils/response.js";
 import { getAccessTokenFromCookies } from "../utils/cookies.js";
 
 declare global {
@@ -25,7 +25,11 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
   }
 
   if (!token) {
-    error(res, "Authentication required", 401);
+    res.status(401).json({
+      success: false,
+      message: "Authentication required",
+      code: "AUTH_REQUIRED",
+    });
     return;
   }
 
@@ -34,8 +38,22 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
     req.userId = payload.userId;
     req.userEmail = payload.email;
     next();
-  } catch {
-    error(res, "Invalid or expired token", 401);
+  } catch (err) {
+    if (err instanceof jwt.TokenExpiredError) {
+      // Token was valid but expired — frontend should call /refresh
+      res.status(401).json({
+        success: false,
+        message: "Access token expired",
+        code: "TOKEN_EXPIRED",
+      });
+    } else {
+      // Token is malformed, tampered, or signed with wrong secret — force logout
+      res.status(401).json({
+        success: false,
+        message: "Invalid token",
+        code: "INVALID_TOKEN",
+      });
+    }
     return;
   }
 }

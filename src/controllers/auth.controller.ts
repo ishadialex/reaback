@@ -14,6 +14,7 @@ import { sendLoginAlert, sendReferralSuccessNotification, sendWelcomeBonusNotifi
 import { getLocationString } from "../services/geolocation.service.js";
 import { env } from "../config/env.js";
 import { setAccessTokenCookie, setRefreshTokenCookie, clearAuthCookies, getRefreshTokenFromCookies } from "../utils/cookies.js";
+import { verify2FACode } from "./twoFactor.controller.js";
 
 function generateReferralCode(): string {
   return crypto.randomBytes(4).toString("hex"); // 8 hex chars
@@ -144,6 +145,8 @@ export async function login(req: Request, res: Response) {
         isActive: true,
         emailVerified: true,
         profilePhoto: true,
+        twoFactorEnabled: true,
+        requireTwoFactorLogin: true,
         accounts: {
           where: { provider: "credentials" },
           select: { passwordHash: true },
@@ -181,6 +184,17 @@ export async function login(req: Request, res: Response) {
         success: false,
         message: "Please verify your email before logging in. Check your inbox for the verification code.",
         requiresVerification: true,
+        email: normalizedEmail,
+      });
+    }
+
+    // Check if 2FA is required for login
+    if (user.requireTwoFactorLogin && user.twoFactorEnabled) {
+      console.log(`🔐 2FA required for login: ${normalizedEmail}`);
+      return res.status(200).json({
+        success: true,
+        requiresTwoFactor: true,
+        message: "Two-factor authentication code required",
         email: normalizedEmail,
       });
     }
@@ -330,6 +344,8 @@ export async function forceLogin(req: Request, res: Response) {
         isActive: true,
         emailVerified: true,
         profilePhoto: true,
+        twoFactorEnabled: true,
+        requireTwoFactorLogin: true,
         accounts: {
           where: { provider: "credentials" },
           select: { passwordHash: true },
@@ -366,6 +382,18 @@ export async function forceLogin(req: Request, res: Response) {
         success: false,
         message: "Please verify your email before logging in. Check your inbox for the verification code.",
         requiresVerification: true,
+        email: normalizedEmail,
+      });
+    }
+
+    // Check if 2FA is required for login
+    if (user.requireTwoFactorLogin && user.twoFactorEnabled) {
+      console.log(`🔐 2FA required for force login: ${normalizedEmail}`);
+      return res.status(200).json({
+        success: true,
+        requiresTwoFactor: true,
+        requiresForceLogin: true,
+        message: "Two-factor authentication code required",
         email: normalizedEmail,
       });
     }
@@ -450,6 +478,164 @@ export async function forceLogin(req: Request, res: Response) {
   } catch (err) {
     console.error("forceLogin error:", err);
     return error(res, "Force login failed", 500);
+  }
+}
+
+export async function verify2FALogin(req: Request, res: Response) {
+  try {
+    const { email, password, code, forceLogin: isForceLogin } = req.body;
+
+    if (!email || !password || !code) {
+      return error(res, "Email, password, and 2FA code are required", 400);
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Re-verify credentials (never trust client-side state alone)
+    const user = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        isActive: true,
+        emailVerified: true,
+        profilePhoto: true,
+        twoFactorEnabled: true,
+        requireTwoFactorLogin: true,
+        accounts: {
+          where: { provider: "credentials" },
+          select: { passwordHash: true },
+        },
+      },
+    });
+
+    if (!user || !user.isActive || !user.emailVerified) {
+      return error(res, "Invalid email or password", 401);
+    }
+
+    const credentialsAccount = user.accounts[0];
+    if (!credentialsAccount || !credentialsAccount.passwordHash) {
+      return error(res, "Please sign in using Google", 401);
+    }
+
+    const valid = await comparePassword(password, credentialsAccount.passwordHash);
+    if (!valid) {
+      return error(res, "Invalid email or password", 401);
+    }
+
+    // Verify 2FA code
+    const is2FAValid = await verify2FACode(user.id, code);
+    if (!is2FAValid) {
+      return error(res, "Invalid 2FA code. Please try again.", 401);
+    }
+
+    // If force login, invalidate all existing sessions
+    if (isForceLogin) {
+      await prisma.session.updateMany({
+        where: { userId: user.id, isActive: true },
+        data: { isActive: false },
+      });
+    } else {
+      // Check for existing active sessions (Single-Device Login Security)
+      const { device, browser } = parseUserAgent(req.headers["user-agent"]);
+      const existingSessions = await prisma.session.findMany({
+        where: { userId: user.id, isActive: true },
+        select: { id: true, device: true, browser: true, location: true, lastActive: true },
+        orderBy: { lastActive: "desc" },
+      });
+
+      if (existingSessions.length > 0) {
+        const sameDeviceSession = existingSessions.find(
+          (s) => s.device === device && s.browser === browser
+        );
+
+        if (sameDeviceSession) {
+          await prisma.session.updateMany({
+            where: { userId: user.id, isActive: true },
+            data: { isActive: false },
+          });
+        } else {
+          const ipAddress = req.ip || "";
+          const location = await getLocationString(ipAddress);
+          const mostRecentSession = existingSessions[0];
+          return res.status(409).json({
+            success: false,
+            requiresForceLogin: true,
+            requiresTwoFactor: true,
+            message: "You are already logged in on another device",
+            existingSession: {
+              device: mostRecentSession.device,
+              browser: mostRecentSession.browser,
+              location: mostRecentSession.location,
+              lastActive: mostRecentSession.lastActive,
+            },
+            newDevice: { device, browser, location },
+          });
+        }
+      }
+    }
+
+    // Generate tokens
+    const { device, browser } = parseUserAgent(req.headers["user-agent"]);
+    const ipAddress = req.ip || "";
+    const location = await getLocationString(ipAddress);
+
+    const name = user.firstName && user.lastName
+      ? `${user.firstName} ${user.lastName}`
+      : user.firstName || user.lastName || undefined;
+
+    const accessToken = signAccessToken({
+      userId: user.id,
+      email: user.email,
+      name,
+      picture: user.profilePhoto || undefined
+    });
+    const refreshToken = signRefreshToken({
+      userId: user.id,
+      email: user.email,
+      name,
+      picture: user.profilePhoto || undefined
+    });
+
+    await prisma.session.create({
+      data: {
+        userId: user.id,
+        token: refreshToken,
+        device,
+        browser,
+        ipAddress,
+        location,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    setImmediate(() => {
+      sendLoginAlert(user.id, user.email, device, browser, location, ipAddress).catch(() => {});
+    });
+
+    setImmediate(() => {
+      notifyAdminUserSignin(
+        `${user.firstName} ${user.lastName}`,
+        user.email,
+        user.id,
+        device,
+        browser,
+        location,
+        ipAddress
+      ).catch((err) => console.error("Error sending admin signin notification:", err));
+    });
+
+    console.log(`✅ 2FA login successful: ${normalizedEmail} from ${location}`);
+
+    setAccessTokenCookie(res, accessToken);
+    setRefreshTokenCookie(res, refreshToken);
+
+    return success(res, { user });
+  } catch (err) {
+    console.error("verify2FALogin error:", err);
+    return error(res, "2FA login failed", 500);
   }
 }
 
@@ -870,9 +1056,57 @@ export async function refreshToken(req: Request, res: Response) {
       return error(res, "Invalid or expired refresh token", 401);
     }
 
-    const session = await prisma.session.findUnique({
+    // Look up session by current token OR by previousToken (grace period)
+    const GRACE_PERIOD_MS = 30 * 1000; // 30 seconds
+
+    let session = await prisma.session.findUnique({
       where: { token },
     });
+
+    // If not found by current token, check if it matches a recently rotated previousToken
+    if (!session) {
+      session = await prisma.session.findFirst({
+        where: { previousToken: token },
+      });
+
+      if (session && session.isActive && session.tokenRotatedAt) {
+        const elapsed = Date.now() - session.tokenRotatedAt.getTime();
+        if (elapsed > GRACE_PERIOD_MS) {
+          // Grace period expired — possible token reuse attack: invalidate session
+          await prisma.session.update({
+            where: { id: session.id },
+            data: { isActive: false },
+          });
+          console.warn(`Token reuse detected after grace period for session ${session.id}. Session invalidated.`);
+          return error(res, "Session has been revoked for security. Please login again.", 401);
+        }
+
+        // Within grace period — return fresh access token without rotating refresh token again
+        const graceUser = await prisma.user.findUnique({
+          where: { id: payload.userId },
+          select: { firstName: true, lastName: true, profilePhoto: true },
+        });
+
+        const graceName = graceUser?.firstName && graceUser?.lastName
+          ? `${graceUser.firstName} ${graceUser.lastName}`
+          : graceUser?.firstName || graceUser?.lastName || undefined;
+
+        const graceAccessToken = signAccessToken({
+          userId: payload.userId,
+          email: payload.email,
+          name: graceName,
+          picture: graceUser?.profilePhoto || undefined
+        });
+
+        // Reuse the already-rotated refresh token — don't rotate again
+        setAccessTokenCookie(res, graceAccessToken);
+        setRefreshTokenCookie(res, session.token);
+
+        return success(res, {
+          message: "Tokens refreshed successfully",
+        });
+      }
+    }
 
     if (!session || !session.isActive) {
       return error(res, "Session not found or has been revoked", 401);
@@ -901,9 +1135,12 @@ export async function refreshToken(req: Request, res: Response) {
       picture: user?.profilePhoto || undefined
     });
 
+    // Rotate token and store the old one for the grace period
     await prisma.session.update({
       where: { id: session.id },
       data: {
+        previousToken: token,
+        tokenRotatedAt: new Date(),
         token: newRefreshToken,
         lastActive: new Date(),
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
@@ -915,7 +1152,6 @@ export async function refreshToken(req: Request, res: Response) {
     setRefreshTokenCookie(res, newRefreshToken);
 
     return success(res, {
-      // Tokens are now in httpOnly cookies, not in response
       message: "Tokens refreshed successfully",
     });
   } catch (err) {
@@ -942,7 +1178,10 @@ export async function validateSession(req: Request, res: Response) {
       return error(res, "Session has been revoked", 401);
     }
 
-    return success(res, { valid: true });
+    return success(res, {
+      valid: true,
+      checkInterval: 5000, // Recommended polling interval in milliseconds (5 seconds)
+    });
   } catch (err) {
     console.error("validateSession error:", err);
     return error(res, "Session validation failed", 500);
