@@ -133,7 +133,7 @@ export async function getStats(req: Request, res: Response) {
  */
 export async function removeSubscriber(req: Request, res: Response) {
   try {
-    const { email } = req.params;
+    const email = req.params.email as string;
 
     if (!email) {
       return error(res, "Email is required", 400);

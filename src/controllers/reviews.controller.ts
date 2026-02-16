@@ -9,7 +9,7 @@ import { success, error } from "../utils/response.js";
  */
 export async function getPublicReviews(req: Request, res: Response) {
   try {
-    const { propertyId } = req.params;
+    const propertyId = req.params.propertyId as string;
 
     const reviews = await prisma.propertyReview.findMany({
       where: { propertyId },
@@ -37,7 +37,7 @@ export async function getPublicReviews(req: Request, res: Response) {
  */
 export async function createReview(req: Request, res: Response) {
   try {
-    const { propertyId } = req.params;
+    const propertyId = req.params.propertyId as string;
     const { rating, title = "", body } = req.body;
     const userId = req.userId!;
 
@@ -65,7 +65,7 @@ export async function createReview(req: Request, res: Response) {
       },
     });
 
-    return success(res, mapReview(review), 201);
+    return success(res, mapReview(review), "Review submitted successfully", 201);
   } catch (err) {
     return error(res, "Failed to submit review", 500);
   }
@@ -76,7 +76,7 @@ export async function createReview(req: Request, res: Response) {
  */
 export async function updateReview(req: Request, res: Response) {
   try {
-    const { reviewId } = req.params;
+    const reviewId = req.params.reviewId as string;
     const { rating, title, body } = req.body;
     const userId = req.userId!;
 
@@ -117,7 +117,7 @@ export async function updateReview(req: Request, res: Response) {
  */
 export async function deleteReview(req: Request, res: Response) {
   try {
-    const { reviewId } = req.params;
+    const reviewId = req.params.reviewId as string;
     const userId = req.userId!;
     const userRole = (req as any).userRole ?? "user";
 
@@ -210,7 +210,7 @@ export async function getAllReviews(req: Request, res: Response) {
  */
 export async function approveReview(req: Request, res: Response) {
   try {
-    const { reviewId } = req.params;
+    const reviewId = req.params.reviewId as string;
     const { isApproved } = req.body;
 
     if (typeof isApproved !== "boolean") {

@@ -24,7 +24,7 @@ function handleUpload(req: Request, res: Response, next: NextFunction) {
 router.get("/", getAll);
 router.get("/:id", getOne);
 router.post("/", handleUpload, create);
-router.put("/:id", handleUpload, update);
+router.patch("/:id", handleUpload, update);
 router.delete("/:id", remove);
 router.delete("/:id/permanent", hardDelete);
 

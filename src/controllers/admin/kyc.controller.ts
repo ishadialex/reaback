@@ -65,7 +65,7 @@ export async function getAllKYCSubmissions(req: Request, res: Response) {
  */
 export async function getKYCSubmission(req: Request, res: Response) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     const submission = await prisma.kYC.findUnique({
       where: { id },
@@ -102,7 +102,7 @@ export async function getKYCSubmission(req: Request, res: Response) {
  */
 export async function approveKYC(req: Request, res: Response) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { adminNotes } = req.body || {};
     const adminId = req.userId!;
 
@@ -140,7 +140,7 @@ export async function approveKYC(req: Request, res: Response) {
           },
         },
       },
-    });
+    }) as any;
 
     // Update user's kycStatus
     await prisma.user.update({
@@ -169,7 +169,7 @@ export async function approveKYC(req: Request, res: Response) {
  */
 export async function rejectKYC(req: Request, res: Response) {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { rejectionReason, adminNotes } = req.body || {};
     const adminId = req.userId!;
 
@@ -207,7 +207,7 @@ export async function rejectKYC(req: Request, res: Response) {
           },
         },
       },
-    });
+    }) as any;
 
     // Update user's kycStatus
     await prisma.user.update({
