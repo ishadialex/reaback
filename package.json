@@ -2,7 +2,7 @@
   "name": "alvarado-backend",
   "version": "1.0.0",
   "private": true,
-  "type": "module",
+  "type": "commonjs",
   "scripts": {
     "dev": "nodemon",
     "build": "prisma generate && tsc",

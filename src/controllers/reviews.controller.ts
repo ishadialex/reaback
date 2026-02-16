@@ -166,16 +166,18 @@ export async function getAllPublicReviews(req: Request, res: Response) {
     const reviews = await prisma.propertyReview.findMany({
       include: {
         user: { select: { firstName: true, lastName: true, profilePhoto: true } },
-        property: { select: { id: true, title: true, location: true, images: true } },
       },
       orderBy: { createdAt: "desc" },
     });
 
     return success(res, reviews.map(mapReview));
-  } catch (err) {
+  } catch (err: any) {
+    console.error("getAllPublicReviews error:", err?.message, err?.code, err?.stack);
     return error(res, "Failed to fetch reviews", 500);
   }
 }
+
+
 
 // ── Admin ────────────────────────────────────────────────────────────────────
 
