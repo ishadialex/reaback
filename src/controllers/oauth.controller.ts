@@ -7,7 +7,8 @@ import { signAccessToken, signRefreshToken } from "../utils/jwt.js";
 import { env } from "../config/env.js";
 import { sendLoginAlert, notifyAdminNewUserSignup, notifyAdminUserSignin, sendReferralSuccessNotification, sendWelcomeBonusNotification } from "../services/notification.service.js";
 import { getLocationString } from "../services/geolocation.service.js";
-import { setAccessTokenCookie, setRefreshTokenCookie } from "../utils/cookies.js";
+// Cookie utilities imported if needed in future
+// Auth cookies are set via exchange-oauth-token endpoint in auth.controller.ts
 
 const googleClient = new OAuth2Client(
   env.GOOGLE_CLIENT_ID,

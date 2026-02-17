@@ -16,11 +16,9 @@ const cookieConfig = {
  * Set access token as httpOnly cookie
  */
 export function setAccessTokenCookie(res: Response, token: string): void {
-  const maxAge = 15 * 60 * 1000; // 15 minutes in milliseconds
-
   res.cookie("access_token", token, {
     ...cookieConfig,
-    maxAge,
+    maxAge: 15 * 60 * 1000, // 15 minutes
   });
 }
 
@@ -28,11 +26,31 @@ export function setAccessTokenCookie(res: Response, token: string): void {
  * Set refresh token as httpOnly cookie
  */
 export function setRefreshTokenCookie(res: Response, token: string): void {
-  const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
-
   res.cookie("refresh_token", token, {
     ...cookieConfig,
-    maxAge,
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  });
+}
+
+/**
+ * Set both auth cookies using a single combined cookie
+ * This avoids issues with proxies dropping multiple Set-Cookie headers
+ */
+export function setAuthCookies(res: Response, accessToken: string, refreshToken: string): void {
+  // Combine both tokens into a single cookie as JSON
+  const authData = JSON.stringify({ at: accessToken, rt: refreshToken });
+  res.cookie("auth_tokens", authData, {
+    ...cookieConfig,
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days (matches refresh token)
+  });
+  // Also set individual cookies for backwards compatibility
+  res.cookie("access_token", accessToken, {
+    ...cookieConfig,
+    maxAge: 15 * 60 * 1000,
+  });
+  res.cookie("refresh_token", refreshToken, {
+    ...cookieConfig,
+    maxAge: 7 * 24 * 60 * 60 * 1000,
   });
 }
 
@@ -42,19 +60,38 @@ export function setRefreshTokenCookie(res: Response, token: string): void {
 export function clearAuthCookies(res: Response): void {
   res.clearCookie("access_token", { ...cookieConfig });
   res.clearCookie("refresh_token", { ...cookieConfig });
+  res.clearCookie("auth_tokens", { ...cookieConfig });
   res.clearCookie("pdf_access_token", { ...cookieConfig });
 }
 
 /**
  * Get access token from request cookies
+ * Tries individual cookie first, then falls back to combined cookie
  */
 export function getAccessTokenFromCookies(req: any): string | null {
-  return req.cookies?.access_token || null;
+  if (req.cookies?.access_token) return req.cookies.access_token;
+  // Fallback: extract from combined cookie
+  if (req.cookies?.auth_tokens) {
+    try {
+      const parsed = JSON.parse(req.cookies.auth_tokens);
+      return parsed.at || null;
+    } catch { return null; }
+  }
+  return null;
 }
 
 /**
  * Get refresh token from request cookies
+ * Tries individual cookie first, then falls back to combined cookie
  */
 export function getRefreshTokenFromCookies(req: any): string | null {
-  return req.cookies?.refresh_token || null;
+  if (req.cookies?.refresh_token) return req.cookies.refresh_token;
+  // Fallback: extract from combined cookie
+  if (req.cookies?.auth_tokens) {
+    try {
+      const parsed = JSON.parse(req.cookies.auth_tokens);
+      return parsed.rt || null;
+    } catch { return null; }
+  }
+  return null;
 }

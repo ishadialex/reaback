@@ -13,7 +13,7 @@ import { sendOtpEmail, sendPasswordResetEmail } from "../services/email.service.
 import { sendLoginAlert, sendReferralSuccessNotification, sendWelcomeBonusNotification, notifyAdminNewUserSignup, notifyAdminUserSignin } from "../services/notification.service.js";
 import { getLocationString } from "../services/geolocation.service.js";
 import { env } from "../config/env.js";
-import { setAccessTokenCookie, setRefreshTokenCookie, clearAuthCookies, getRefreshTokenFromCookies } from "../utils/cookies.js";
+import { setAuthCookies, clearAuthCookies, getRefreshTokenFromCookies } from "../utils/cookies.js";
 import { verify2FACode } from "./twoFactor.controller.js";
 
 function generateReferralCode(): string {
@@ -310,9 +310,8 @@ export async function login(req: Request, res: Response) {
 
     console.log(`✅ Login successful: ${normalizedEmail} from ${location}`);
 
-    // Set tokens as httpOnly cookies
-    setAccessTokenCookie(res, accessToken);
-    setRefreshTokenCookie(res, refreshToken);
+    // Set tokens as httpOnly cookies (combined + individual for proxy compatibility)
+    setAuthCookies(res, accessToken, refreshToken);
 
     return success(res, {
       user,
@@ -466,9 +465,8 @@ export async function forceLogin(req: Request, res: Response) {
 
     console.log(`✅ Force login successful: ${normalizedEmail} from ${location} (${invalidatedSessions.count} device(s) logged out)`);
 
-    // Set tokens as httpOnly cookies
-    setAccessTokenCookie(res, accessToken);
-    setRefreshTokenCookie(res, refreshToken);
+    // Set tokens as httpOnly cookies (combined + individual for proxy compatibility)
+    setAuthCookies(res, accessToken, refreshToken);
 
     return success(res, {
       user,
@@ -525,8 +523,7 @@ export async function verify2FALogin(req: Request, res: Response) {
       }
 
       // 2FA verified - set cookies and complete login
-      setAccessTokenCookie(res, oAuthTokenRecord.accessToken);
-      setRefreshTokenCookie(res, oAuthTokenRecord.refreshToken);
+      setAuthCookies(res, oAuthTokenRecord.accessToken, oAuthTokenRecord.refreshToken);
 
       // Delete the temporary OAuth token
       await prisma.oAuthToken.delete({ where: { token: oauthToken } });
@@ -723,8 +720,7 @@ export async function verify2FALogin(req: Request, res: Response) {
 
     console.log(`✅ 2FA login successful: ${normalizedEmail} from ${location}`);
 
-    setAccessTokenCookie(res, accessToken);
-    setRefreshTokenCookie(res, refreshToken);
+    setAuthCookies(res, accessToken, refreshToken);
 
     return success(res, { user });
   } catch (err) {
@@ -905,9 +901,8 @@ export async function verifyOtp(req: Request, res: Response) {
       },
     });
 
-    // Set tokens as httpOnly cookies
-    setAccessTokenCookie(res, accessToken);
-    setRefreshTokenCookie(res, refreshToken);
+    // Set tokens as httpOnly cookies (combined + individual for proxy compatibility)
+    setAuthCookies(res, accessToken, refreshToken);
 
     // Return user data (tokens are in httpOnly cookies)
     return success(res, {
@@ -1193,8 +1188,7 @@ export async function refreshToken(req: Request, res: Response) {
         });
 
         // Reuse the already-rotated refresh token — don't rotate again
-        setAccessTokenCookie(res, graceAccessToken);
-        setRefreshTokenCookie(res, session.token);
+        setAuthCookies(res, graceAccessToken, session.token);
 
         return success(res, {
           message: "Tokens refreshed successfully",
@@ -1241,9 +1235,8 @@ export async function refreshToken(req: Request, res: Response) {
       },
     });
 
-    // Set new tokens as httpOnly cookies
-    setAccessTokenCookie(res, newAccessToken);
-    setRefreshTokenCookie(res, newRefreshToken);
+    // Set new tokens as httpOnly cookies (combined + individual for proxy compatibility)
+    setAuthCookies(res, newAccessToken, newRefreshToken);
 
     return success(res, {
       message: "Tokens refreshed successfully",
@@ -1384,9 +1377,8 @@ export async function exchangeOAuthToken(req: Request, res: Response) {
       });
     }
 
-    // Set httpOnly cookies with the stored tokens
-    setAccessTokenCookie(res, oAuthToken.accessToken);
-    setRefreshTokenCookie(res, oAuthToken.refreshToken);
+    // Set httpOnly cookies with the stored tokens (combined + individual for proxy compatibility)
+    setAuthCookies(res, oAuthToken.accessToken, oAuthToken.refreshToken);
 
     // Delete the temporary token (one-time use)
     await prisma.oAuthToken.delete({ where: { token } });
