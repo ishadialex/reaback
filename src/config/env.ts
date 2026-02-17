@@ -23,10 +23,10 @@ const envSchema = z.object({
   EMAIL_FROM: z.string().optional(),
   APP_NAME: z.string().optional(),
   APP_URL: z.string().optional(),
-  // Cloudinary (image storage)
-  CLOUDINARY_CLOUD_NAME: z.string().min(1),
-  CLOUDINARY_API_KEY: z.string().min(1),
-  CLOUDINARY_API_SECRET: z.string().min(1),
+  // Cloudinary (image storage) - Optional: Required only for image upload features
+  CLOUDINARY_CLOUD_NAME: z.string().min(1).optional(),
+  CLOUDINARY_API_KEY: z.string().min(1).optional(),
+  CLOUDINARY_API_SECRET: z.string().min(1).optional(),
   // Admin notifications
   ADMIN_EMAIL: z.string().optional(),
   // IP Geolocation (optional - free tier: 50k requests/month without token)
