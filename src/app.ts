@@ -36,6 +36,10 @@ app.use(
         return callback(null, true);
       }
 
+      
+// // Allow specific frontend deployments
+// if (origin === "https://reafront-sage.vercel.app") return callback(null, true);
+
       // Allow any ngrok URL for development
       if (origin.includes("ngrok-free.app") || origin.includes("ngrok.io") || origin.includes("ngrok-free.dev")) {
         return callback(null, true);
