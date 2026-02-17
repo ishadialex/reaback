@@ -1256,17 +1256,33 @@ export async function refreshToken(req: Request, res: Response) {
 
 export async function validateSession(req: Request, res: Response) {
   try {
-    // Read refresh token from httpOnly cookie instead of body
     const token = getRefreshTokenFromCookies(req);
 
     if (!token) {
       return error(res, "No token provided", 401);
     }
 
-    const session = await prisma.session.findUnique({
+    // Check current token
+    let session = await prisma.session.findUnique({
       where: { token },
       select: { isActive: true },
     });
+
+    // If not found, check grace period for recently rotated tokens
+    if (!session) {
+      const GRACE_PERIOD_MS = 30 * 1000;
+      const graceSession = await prisma.session.findFirst({
+        where: { previousToken: token },
+        select: { isActive: true, tokenRotatedAt: true },
+      });
+
+      if (graceSession && graceSession.isActive && graceSession.tokenRotatedAt) {
+        const elapsed = Date.now() - graceSession.tokenRotatedAt.getTime();
+        if (elapsed <= GRACE_PERIOD_MS) {
+          return success(res, { valid: true, checkInterval: 5000 });
+        }
+      }
+    }
 
     if (!session || !session.isActive) {
       return error(res, "Session has been revoked", 401);
@@ -1274,7 +1290,7 @@ export async function validateSession(req: Request, res: Response) {
 
     return success(res, {
       valid: true,
-      checkInterval: 5000, // Recommended polling interval in milliseconds (5 seconds)
+      checkInterval: 5000,
     });
   } catch (err) {
     console.error("validateSession error:", err);

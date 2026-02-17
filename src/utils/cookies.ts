@@ -6,10 +6,10 @@ const isProduction = process.env.NODE_ENV === "production";
  * Cookie configuration for httpOnly cookies
  */
 const cookieConfig = {
-  httpOnly: true, // Cannot be accessed by JavaScript (XSS protection)
-  secure: isProduction, // Only sent over HTTPS in production
-  sameSite: "lax" as const, // "lax" works with Next.js rewrites proxy (cookies are first-party)
-  path: "/", // Available for all routes
+  httpOnly: true,
+  secure: isProduction,
+  sameSite: (isProduction ? "strict" : "lax") as "strict" | "lax",
+  path: "/",
 };
 
 /**
