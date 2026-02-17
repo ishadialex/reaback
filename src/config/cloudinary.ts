@@ -10,7 +10,9 @@ if (env.CLOUDINARY_CLOUD_NAME && env.CLOUDINARY_API_KEY && env.CLOUDINARY_API_SE
   });
   console.log("✓ Cloudinary configured");
 } else {
-  console.warn("⚠️  Cloudinary not configured - image uploads will not work");
+  console.warn("⚠️  Cloudinary not configured - using memory storage for uploads");
+  console.warn("   This is NOT suitable for production. Files will be lost on server restart.");
+  console.warn("   Please configure CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET.");
 }
 
 export { cloudinary };

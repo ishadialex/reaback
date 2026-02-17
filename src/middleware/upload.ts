@@ -10,6 +10,12 @@ const isCloudinaryConfigured = !!(
   env.CLOUDINARY_API_SECRET
 );
 
+// Log warning if using memory storage (not suitable for production)
+if (!isCloudinaryConfigured) {
+  console.warn("⚠️  Upload middleware using memory storage (fallback mode)");
+  console.warn("   Configure Cloudinary for production use to persist uploaded files.");
+}
+
 // Create storage configurations only if Cloudinary is configured
 const profileStorage = isCloudinaryConfigured
   ? new CloudinaryStorage({
