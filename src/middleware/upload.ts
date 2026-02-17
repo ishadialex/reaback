@@ -1,51 +1,76 @@
 import multer from "multer";
 import { CloudinaryStorage } from "multer-storage-cloudinary";
 import { cloudinary } from "../config/cloudinary.js";
+import { env } from "../config/env.js";
 
-const profileStorage = new CloudinaryStorage({
-  cloudinary,
-  params: {
-    folder: "alvarado/profiles",
-    allowed_formats: ["jpg", "jpeg", "png", "gif", "webp"],
-    transformation: [{ width: 400, height: 400, crop: "fill" }],
-  } as any,
-});
+// Check if Cloudinary is configured
+const isCloudinaryConfigured = !!(
+  env.CLOUDINARY_CLOUD_NAME &&
+  env.CLOUDINARY_API_KEY &&
+  env.CLOUDINARY_API_SECRET
+);
 
-const propertyStorage = new CloudinaryStorage({
-  cloudinary,
-  params: {
-    folder: "alvarado/properties",
-    allowed_formats: ["jpg", "jpeg", "png", "gif", "webp"],
-    transformation: [{ width: 1200, height: 800, crop: "limit" }],
-  } as any,
-});
+// Log warning if using memory storage (not suitable for production)
+if (!isCloudinaryConfigured) {
+  console.warn("⚠️  Upload middleware using memory storage (fallback mode)");
+  console.warn("   Configure Cloudinary for production use to persist uploaded files.");
+}
 
-const attachmentStorage = new CloudinaryStorage({
-  cloudinary,
-  params: {
-    folder: "alvarado/attachments",
-    allowed_formats: ["jpg", "jpeg", "png", "gif", "webp", "pdf"],
-    resource_type: "auto",
-  } as any,
-});
+// Create storage configurations only if Cloudinary is configured
+const profileStorage = isCloudinaryConfigured
+  ? new CloudinaryStorage({
+      cloudinary,
+      params: {
+        folder: "alvarado/profiles",
+        allowed_formats: ["jpg", "jpeg", "png", "gif", "webp"],
+        transformation: [{ width: 400, height: 400, crop: "fill" }],
+      } as any,
+    })
+  : multer.memoryStorage();
 
-const teamStorage = new CloudinaryStorage({
-  cloudinary,
-  params: {
-    folder: "alvarado/team",
-    allowed_formats: ["jpg", "jpeg", "png", "gif", "webp"],
-    transformation: [{ width: 600, height: 600, crop: "fill", gravity: "face" }],
-  } as any,
-});
+const propertyStorage = isCloudinaryConfigured
+  ? new CloudinaryStorage({
+      cloudinary,
+      params: {
+        folder: "alvarado/properties",
+        allowed_formats: ["jpg", "jpeg", "png", "gif", "webp"],
+        transformation: [{ width: 1200, height: 800, crop: "limit" }],
+      } as any,
+    })
+  : multer.memoryStorage();
 
-const kycStorage = new CloudinaryStorage({
-  cloudinary,
-  params: {
-    folder: "alvarado/kyc-documents",
-    allowed_formats: ["jpg", "jpeg", "png", "pdf"],
-    resource_type: "auto",
-  } as any,
-});
+const attachmentStorage = isCloudinaryConfigured
+  ? new CloudinaryStorage({
+      cloudinary,
+      params: {
+        folder: "alvarado/attachments",
+        allowed_formats: ["jpg", "jpeg", "png", "gif", "webp", "pdf"],
+        resource_type: "auto",
+      } as any,
+    })
+  : multer.memoryStorage();
+
+const teamStorage = isCloudinaryConfigured
+  ? new CloudinaryStorage({
+      cloudinary,
+      params: {
+        folder: "alvarado/team",
+        allowed_formats: ["jpg", "jpeg", "png", "gif", "webp"],
+        transformation: [{ width: 600, height: 600, crop: "fill", gravity: "face" }],
+      } as any,
+    })
+  : multer.memoryStorage();
+
+const kycStorage = isCloudinaryConfigured
+  ? new CloudinaryStorage({
+      cloudinary,
+      params: {
+        folder: "alvarado/kyc-documents",
+        allowed_formats: ["jpg", "jpeg", "png", "pdf"],
+        resource_type: "auto",
+      } as any,
+    })
+  : multer.memoryStorage();
 
 export const uploadTeamImage = multer({
   storage: teamStorage,

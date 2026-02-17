@@ -33,6 +33,11 @@ JWT_EXPIRES_IN="15m"
 JWT_REFRESH_EXPIRES_IN="7d"
 FRONTEND_URL="http://localhost:3000"
 
+# Optional - Cloudinary (for image uploads)
+CLOUDINARY_CLOUD_NAME="your-cloud-name"
+CLOUDINARY_API_KEY="your-api-key"
+CLOUDINARY_API_SECRET="your-api-secret"
+
 # Optional - Email configuration
 SMTP_HOST="smtp.gmail.com"
 SMTP_PORT=587
