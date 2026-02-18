@@ -2,6 +2,21 @@ import { prisma } from "../config/database.js";
 import { transporter, emailConfig } from "../config/email.js";
 import { env } from "../config/env.js";
 import { emitToUser } from "./socket.service.js";
+import {
+  emailWrapper,
+  ctaButton,
+  infoBox,
+  warningBox,
+  successBox,
+  dangerBox,
+  detailRow,
+  detailTable,
+  sectionHeading,
+  paragraph,
+  bigAmount,
+  badge,
+  BRAND_PRIMARY,
+} from "../utils/emailTemplate.js";
 
 export enum NotificationType {
   EMAIL = "email",
@@ -36,11 +51,9 @@ async function canSendNotification(
     });
 
     if (!settings) {
-      // If no settings exist, use defaults (all enabled except marketing)
       return type !== NotificationType.MARKETING;
     }
 
-    // Check specific setting based on notification type
     switch (type) {
       case NotificationType.EMAIL:
         return settings.emailNotifications;
@@ -68,20 +81,17 @@ export async function sendEmailNotification(
   type: NotificationType = NotificationType.EMAIL
 ): Promise<boolean> {
   try {
-    // Check if user has enabled this notification type
     const canSend = await canSendNotification(userId, type);
     if (!canSend) {
       console.log(`📭 Notification blocked by user settings: ${type} for user ${userId}`);
       return false;
     }
 
-    // Check if email is configured
     if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
       console.log("⚠️  Email not configured, skipping email send");
       return false;
     }
 
-    // Send email with timeout
     const sendPromise = transporter.sendMail({
       from: emailConfig.from,
       to: emailOptions.to,
@@ -90,7 +100,6 @@ export async function sendEmailNotification(
       text: emailOptions.text || emailOptions.html.replace(/<[^>]*>/g, ""),
     });
 
-    // Add 10-second timeout
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error("Email send timeout")), 10000)
     );
@@ -124,7 +133,6 @@ export async function createInAppNotification(
         isRead: false,
       },
     });
-    // Push real-time notification to user via Socket.io
     emitToUser(userId, "notification", {
       id: notification.id,
       type: notification.type,
@@ -158,75 +166,28 @@ export async function sendLoginAlert(
 
     const userName = user ? `${user.firstName} ${user.lastName}` : "User";
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <style>
-          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: #4F46E5; color: white; padding: 25px 30px; text-align: center; border-radius: 8px 8px 0 0; }
-          .header h1 { margin: 0; font-size: 22px; font-weight: 600; }
-          .content { background: #ffffff; padding: 30px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px; }
-          .info-box { background: #f9fafb; border: 1px solid #e5e7eb; padding: 20px; margin: 20px 0; border-radius: 6px; }
-          .info-row { padding: 8px 0; display: flex; justify-content: space-between; border-bottom: 1px solid #e5e7eb; }
-          .info-row:last-child { border-bottom: none; }
-          .info-label { font-weight: 500; color: #6b7280; }
-          .info-value { color: #111827; text-align: right; }
-          .button { display: inline-block; background: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 15px 0; font-weight: 500; }
-          .footer { text-align: center; padding: 20px; color: #6b7280; font-size: 13px; }
-          .footer a { color: #4F46E5; text-decoration: none; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>Account Login Notification</h1>
-          </div>
-          <div class="content">
-            <p>Hello ${userName},</p>
-            <p>A new login was detected on your ${emailConfig.appName} account. If this was you, no action is needed.</p>
-
-            <div class="info-box">
-              <div class="info-row">
-                <span class="info-label">Device</span>
-                <span class="info-value">${device}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">Browser</span>
-                <span class="info-value">${browser}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">Location</span>
-                <span class="info-value">${location}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">IP Address</span>
-                <span class="info-value">${ipAddress}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">Time</span>
-                <span class="info-value">${new Date().toLocaleString()}</span>
-              </div>
-            </div>
-
-            <p>If you did not authorize this login, please secure your account immediately by changing your password and reviewing your active sessions.</p>
-
-            <p style="text-align: center;">
-              <a href="${emailConfig.appUrl}/dashboard/settings?tab=sessions" class="button">
-                View Active Sessions
-              </a>
-            </p>
-          </div>
-          <div class="footer">
-            <p>&copy; ${new Date().getFullYear()} ${emailConfig.appName}. All rights reserved.</p>
-            <p>This is an automated notification. You can <a href="${emailConfig.appUrl}/dashboard/settings?tab=notifications">manage your preferences</a>.</p>
-          </div>
-        </div>
-      </body>
-      </html>
+    const body = `
+      ${sectionHeading("New Login Detected")}
+      ${paragraph(`Hello <strong>${userName}</strong>,`)}
+      ${paragraph(`A new sign-in was detected on your <strong>${emailConfig.appName}</strong> account. If this was you, no further action is needed.`)}
+      ${detailTable(
+        detailRow("Device", device) +
+        detailRow("Browser", browser) +
+        detailRow("Location", location) +
+        detailRow("IP Address", ipAddress) +
+        detailRow("Time", new Date().toLocaleString())
+      )}
+      ${warningBox(`
+        <p style="margin:0; font-size:14px; color:#92400e;"><strong>Wasn't you?</strong> Secure your account immediately — change your password and review your active sessions.</p>
+      `)}
+      ${ctaButton("Review Active Sessions", `${emailConfig.appUrl}/dashboard/settings?tab=sessions`)}
+      <p style="margin:20px 0 0; font-size:14px; color:#9ca3af;">Regards,<br><strong style="color:#374151;">${emailConfig.appName} Security Team</strong></p>
     `;
+
+    const html = emailWrapper({
+      preheader: `New login from ${device} in ${location}.`,
+      body,
+    });
 
     await sendEmailNotification(
       userId,
@@ -234,12 +195,11 @@ export async function sendLoginAlert(
         to: userEmail,
         subject: `New login to your ${emailConfig.appName} account`,
         html,
-        text: `Hello ${userName},\n\nA new login was detected on your ${emailConfig.appName} account. If this was you, no action is needed.\n\nLogin Details:\nDevice: ${device}\nBrowser: ${browser}\nLocation: ${location}\nIP Address: ${ipAddress}\nTime: ${new Date().toLocaleString()}\n\nIf you did not authorize this login, please secure your account immediately by changing your password and reviewing your active sessions.\n\nView Active Sessions: ${emailConfig.appUrl}/dashboard/settings?tab=sessions\n\n© ${new Date().getFullYear()} ${emailConfig.appName}. All rights reserved.\nThis is an automated notification.`,
+        text: `Hello ${userName},\n\nA new login was detected on your ${emailConfig.appName} account.\n\nDevice: ${device}\nBrowser: ${browser}\nLocation: ${location}\nIP: ${ipAddress}\nTime: ${new Date().toLocaleString()}\n\nIf this wasn't you, secure your account immediately.\n\n${emailConfig.appUrl}/dashboard/settings?tab=sessions`,
       },
       NotificationType.LOGIN_ALERT
     );
 
-    // Create in-app notification
     await createInAppNotification(
       userId,
       "security",
@@ -247,7 +207,6 @@ export async function sendLoginAlert(
       `New login from ${device} (${browser}) in ${location}`
     );
 
-    // Send real-time Socket.IO push notification
     emitToUser(userId, "login_alert", {
       device,
       browser,
@@ -269,70 +228,26 @@ export async function sendAccountDeactivationEmail(
   firstName: string
 ): Promise<void> {
   try {
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.8; color: #333; margin: 0; padding: 0; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .header h1 { margin: 0 0 10px; font-size: 28px; }
-          .header p { margin: 0; opacity: 0.9; font-size: 16px; }
-          .content { background: #f9f9f9; padding: 40px 30px; border-radius: 0 0 10px 10px; }
-          .farewell-box { background: #fff; border-left: 4px solid #667eea; padding: 25px; margin: 25px 0; border-radius: 5px; font-style: italic; color: #555; font-size: 15px; line-height: 1.9; }
-          .info-box { background: #e7f3ff; border: 1px solid #b3d9ff; padding: 20px; margin: 20px 0; border-radius: 8px; }
-          .info-box ul { margin: 10px 0; padding-left: 20px; }
-          .info-box li { margin: 6px 0; }
-          .cta-button { display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 14px 35px; text-decoration: none; border-radius: 30px; margin: 15px 0; font-weight: bold; font-size: 15px; }
-          .footer { text-align: center; padding: 25px 20px; color: #888; font-size: 12px; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>💙 Goodbye for Now, ${firstName}</h1>
-            <p>Your account has been deactivated</p>
-          </div>
-          <div class="content">
-            <p>Dear ${firstName},</p>
+    const supportEmail = `support@${new URL(emailConfig.appUrl).hostname}`;
 
-            <p>We wanted to take a moment to reach out and let you know that your account has been deactivated, just as you requested.</p>
-
-            <div class="farewell-box">
-              "Every journey has its seasons, and we understand that sometimes paths change. It meant the world to us to have you as part of our community — whether you were just starting out or had been with us through every milestone. We hope we played even a small role in your story."
-            </div>
-
-            <p>We'll be honest — it's not easy saying goodbye. We've cherished every moment you spent with us, and we hope the experience was valuable to you in some way.</p>
-
-            <div class="info-box">
-              <strong>📋 What happens to your data:</strong>
-              <ul>
-                <li>Your account and all associated data are <strong>safely retained</strong></li>
-                <li>No information has been permanently deleted</li>
-                <li>Your investment history and records remain intact</li>
-              </ul>
-            </div>
-
-            <p>If you ever feel the time is right to come back — whether it's tomorrow, next month, or next year — the door is always open. Simply reach out to our support team and we'll restore your account with everything just as you left it.</p>
-
-            <p>
-              <a href="mailto:support@${new URL(emailConfig.appUrl).hostname}" class="cta-button">
-                Contact Support to Return
-              </a>
-            </p>
-
-            <p>Thank you for the trust you placed in us. We genuinely wish you all the best in whatever comes next. ❤️</p>
-
-            <p>With gratitude,<br><strong>The ${emailConfig.appName} Team</strong></p>
-          </div>
-          <div class="footer">
-            <p>&copy; ${new Date().getFullYear()} ${emailConfig.appName}. All rights reserved.</p>
-            <p>This email was sent because your account was deactivated on ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}.</p>
-          </div>
-        </div>
-      </body>
-      </html>
+    const body = `
+      ${sectionHeading("Goodbye for Now, " + firstName)}
+      ${paragraph(`Dear <strong>${firstName}</strong>,`)}
+      ${paragraph("Your account has been deactivated as requested. We're sorry to see you go — it's been a privilege having you as part of our community.")}
+      ${infoBox(`
+        <p style="margin:0 0 6px; font-size:15px; font-style:italic; color:#374151; line-height:1.8;">"Every journey has its seasons, and we understand that sometimes paths change. It meant the world to us to have you as part of our community — whether you were just starting out or had been with us through every milestone."</p>
+      `)}
+      ${successBox(`
+        <p style="margin:0 0 10px; font-size:14px; font-weight:600; color:#15803d;">Your data is safely retained.</p>
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+          <tr><td style="padding:4px 0; font-size:14px; color:#166534;">&#10003;&nbsp; Your account and data are securely preserved</td></tr>
+          <tr><td style="padding:4px 0; font-size:14px; color:#166534;">&#10003;&nbsp; No information has been permanently deleted</td></tr>
+          <tr><td style="padding:4px 0; font-size:14px; color:#166534;">&#10003;&nbsp; Your investment history and records remain intact</td></tr>
+        </table>
+      `)}
+      ${paragraph("Whenever you're ready to return — whether tomorrow or next year — we'll restore your account exactly as you left it. Just reach out and we'll take care of the rest.")}
+      ${ctaButton("Contact Support to Return", `mailto:${supportEmail}`)}
+      <p style="margin:20px 0 0; font-size:14px; color:#9ca3af;">With gratitude,<br><strong style="color:#374151;">The ${emailConfig.appName} Team</strong></p>
     `;
 
     if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
@@ -343,9 +258,9 @@ export async function sendAccountDeactivationEmail(
     await transporter.sendMail({
       from: emailConfig.from,
       to: userEmail,
-      subject: `💙 We'll miss you, ${firstName} — Account Deactivated`,
-      html,
-      text: `Dear ${firstName},\n\nYour ${emailConfig.appName} account has been deactivated as requested.\n\nYour data is safely retained. If you ever wish to return, contact our support team and we'll restore everything.\n\nThank you for being part of our community.\n\nWith gratitude,\nThe ${emailConfig.appName} Team`,
+      subject: `We'll miss you, ${firstName} — Your account has been deactivated`,
+      html: emailWrapper({ preheader: "Your account has been deactivated. Your data is safely retained.", body }),
+      text: `Dear ${firstName},\n\nYour ${emailConfig.appName} account has been deactivated as requested.\n\nYour data is safely retained. Contact ${supportEmail} to restore your account at any time.\n\nWith gratitude,\n${emailConfig.appName} Team`,
     });
 
     console.log(`💙 Account deactivation email sent to ${userEmail}`);
@@ -368,10 +283,7 @@ export async function notifyAdminNewTicket(
 ): Promise<void> {
   try {
     const adminEmail = env.ADMIN_EMAIL;
-    if (!adminEmail || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      console.log("⚠️  Admin email not configured, skipping admin ticket notification");
-      return;
-    }
+    if (!adminEmail || !process.env.SMTP_USER || !process.env.SMTP_PASS) return;
 
     const priorityColors: Record<string, string> = {
       low: "#6b7280",
@@ -380,62 +292,30 @@ export async function notifyAdminNewTicket(
       urgent: "#ef4444",
     };
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px 30px; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .ticket-box { background: #fff; border-left: 4px solid #667eea; padding: 20px; margin: 20px 0; border-radius: 5px; }
-          .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; color: white; }
-          .detail-row { padding: 8px 0; border-bottom: 1px solid #eee; }
-          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h2 style="margin:0">🎫 New Support Ticket</h2>
-            <p style="margin:5px 0 0">A user has submitted a new support request</p>
-          </div>
-          <div class="content">
-            <div class="ticket-box">
-              <div class="detail-row"><strong>From:</strong> ${userName} (${userEmail})</div>
-              <div class="detail-row"><strong>Ticket ID:</strong> ${ticketId}</div>
-              <div class="detail-row"><strong>Subject:</strong> ${subject}</div>
-              <div class="detail-row"><strong>Category:</strong> ${category}</div>
-              <div class="detail-row">
-                <strong>Priority:</strong>
-                <span class="badge" style="background:${priorityColors[priority] || "#6b7280"}">${priority.toUpperCase()}</span>
-              </div>
-              <div class="detail-row"><strong>Time:</strong> ${new Date().toLocaleString()}</div>
-            </div>
-            <p><strong>Message:</strong></p>
-            <div style="background:#fff;padding:15px;border-radius:5px;border:1px solid #eee;white-space:pre-wrap">${message}</div>
-            <p style="margin-top:20px">
-              <a href="${emailConfig.appUrl}/dashboard/support"
-                 style="display:inline-block;background:#667eea;color:white;padding:12px 30px;text-decoration:none;border-radius:5px">
-                View Ticket
-              </a>
-            </p>
-          </div>
-          <div class="footer">
-            <p>&copy; ${new Date().getFullYear()} ${emailConfig.appName} Admin Panel</p>
-          </div>
-        </div>
-      </body>
-      </html>
+    const body = `
+      ${badge("New Support Ticket", priorityColors[priority] || "#6b7280")}
+      <br><br>
+      ${sectionHeading("New Support Ticket")}
+      ${paragraph("A user has submitted a new support request requiring your attention.")}
+      ${detailTable(
+        detailRow("From", `${userName} (${userEmail})`) +
+        detailRow("Ticket ID", ticketId) +
+        detailRow("Subject", subject) +
+        detailRow("Category", category) +
+        detailRow("Priority", `<span style="color:${priorityColors[priority] || "#6b7280"}; font-weight:700; text-transform:uppercase;">${priority}</span>`) +
+        detailRow("Submitted", new Date().toLocaleString())
+      )}
+      ${infoBox(`<p style="margin:0 0 8px; font-size:14px; font-weight:600; color:#374151;">Message:</p><p style="margin:0; font-size:14px; color:#374151; white-space:pre-wrap;">${message}</p>`)}
+      ${ctaButton("View Ticket", `${emailConfig.appUrl}/dashboard/support`)}
+      <p style="margin:20px 0 0; font-size:13px; color:#9ca3af;">${emailConfig.appName} Admin Panel</p>
     `;
 
     await transporter.sendMail({
       from: emailConfig.from,
       to: adminEmail,
       subject: `[${priority.toUpperCase()}] New Support Ticket: ${subject}`,
-      html,
-      text: `New support ticket from ${userName} (${userEmail})\n\nSubject: ${subject}\nCategory: ${category}\nPriority: ${priority}\n\nMessage:\n${message}`,
+      html: emailWrapper({ preheader: `New ${priority} priority ticket from ${userName}.`, body }),
+      text: `New support ticket from ${userName} (${userEmail})\n\nSubject: ${subject}\nCategory: ${category}\nPriority: ${priority}\nTicket ID: ${ticketId}\n\nMessage:\n${message}`,
     });
 
     console.log(`✅ Admin ticket notification sent to ${adminEmail}`);
@@ -456,60 +336,29 @@ export async function notifyAdminTicketReply(
 ): Promise<void> {
   try {
     const adminEmail = env.ADMIN_EMAIL;
-    if (!adminEmail || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      console.log("⚠️  Admin email not configured, skipping admin reply notification");
-      return;
-    }
+    if (!adminEmail || !process.env.SMTP_USER || !process.env.SMTP_PASS) return;
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 25px 30px; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .reply-box { background: #fff; border-left: 4px solid #10b981; padding: 20px; margin: 20px 0; border-radius: 5px; }
-          .detail-row { padding: 8px 0; border-bottom: 1px solid #eee; }
-          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h2 style="margin:0">💬 Ticket Reply Received</h2>
-            <p style="margin:5px 0 0">A user replied to their support ticket</p>
-          </div>
-          <div class="content">
-            <div class="reply-box">
-              <div class="detail-row"><strong>From:</strong> ${userName} (${userEmail})</div>
-              <div class="detail-row"><strong>Ticket ID:</strong> ${ticketId}</div>
-              <div class="detail-row"><strong>Subject:</strong> ${subject}</div>
-              <div class="detail-row"><strong>Time:</strong> ${new Date().toLocaleString()}</div>
-            </div>
-            <p><strong>Reply:</strong></p>
-            <div style="background:#fff;padding:15px;border-radius:5px;border:1px solid #eee;white-space:pre-wrap">${message}</div>
-            <p style="margin-top:20px">
-              <a href="${emailConfig.appUrl}/dashboard/support"
-                 style="display:inline-block;background:#10b981;color:white;padding:12px 30px;text-decoration:none;border-radius:5px">
-                View Ticket
-              </a>
-            </p>
-          </div>
-          <div class="footer">
-            <p>&copy; ${new Date().getFullYear()} ${emailConfig.appName} Admin Panel</p>
-          </div>
-        </div>
-      </body>
-      </html>
+    const body = `
+      ${badge("Ticket Reply", "#3b82f6")}
+      <br><br>
+      ${sectionHeading("Ticket Reply Received")}
+      ${paragraph("A user has replied to their support ticket.")}
+      ${detailTable(
+        detailRow("From", `${userName} (${userEmail})`) +
+        detailRow("Ticket ID", ticketId) +
+        detailRow("Subject", subject) +
+        detailRow("Time", new Date().toLocaleString())
+      )}
+      ${infoBox(`<p style="margin:0 0 8px; font-size:14px; font-weight:600; color:#374151;">Reply:</p><p style="margin:0; font-size:14px; color:#374151; white-space:pre-wrap;">${message}</p>`)}
+      ${ctaButton("View Ticket", `${emailConfig.appUrl}/dashboard/support`, "#3b82f6")}
+      <p style="margin:20px 0 0; font-size:13px; color:#9ca3af;">${emailConfig.appName} Admin Panel</p>
     `;
 
     await transporter.sendMail({
       from: emailConfig.from,
       to: adminEmail,
       subject: `[Reply] Ticket: ${subject}`,
-      html,
+      html: emailWrapper({ preheader: `${userName} replied to ticket: ${subject}.`, body }),
       text: `Reply from ${userName} (${userEmail})\n\nTicket ID: ${ticketId}\nSubject: ${subject}\n\nReply:\n${message}`,
     });
 
@@ -532,75 +381,44 @@ export async function notifyAdminManualDeposit(
 ): Promise<void> {
   try {
     const adminEmail = env.ADMIN_EMAIL;
-    if (!adminEmail || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      console.log("⚠️  Admin email not configured, skipping manual deposit notification");
-      return;
-    }
+    if (!adminEmail || !process.env.SMTP_USER || !process.env.SMTP_PASS) return;
 
     const methodLabel = method === "crypto"
       ? `Cryptocurrency (${details.cryptoType || "Unknown"})`
       : "Bank Transfer";
-
     const userContactEmail = (details.email as string) || userEmail;
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #f97316 0%, #ea580c 100%); color: white; padding: 25px 30px; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .deposit-box { background: #fff; border-left: 4px solid #f97316; padding: 20px; margin: 20px 0; border-radius: 5px; }
-          .detail-row { padding: 8px 0; border-bottom: 1px solid #eee; }
-          .amount { font-size: 28px; font-weight: bold; color: #f97316; margin: 15px 0; }
-          .action-box { background: #fff7ed; border: 1px solid #fdba74; padding: 15px; margin: 20px 0; border-radius: 8px; }
-          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h2 style="margin:0">💰 Manual Deposit Request</h2>
-            <p style="margin:5px 0 0">Action required: Send payment instructions to user</p>
-          </div>
-          <div class="content">
-            <p>A user has submitted a manual deposit request and is waiting for payment instructions.</p>
-
-            <div class="deposit-box">
-              <div class="amount">$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-              <div class="detail-row"><strong>Reference:</strong> ${reference}</div>
-              <div class="detail-row"><strong>Method:</strong> ${methodLabel}</div>
-              <div class="detail-row"><strong>User:</strong> ${userName}</div>
-              <div class="detail-row"><strong>User Account Email:</strong> ${userEmail}</div>
-              <div class="detail-row"><strong>Send Instructions To:</strong> <strong>${userContactEmail}</strong></div>
-              <div class="detail-row"><strong>Submitted:</strong> ${new Date().toLocaleString()}</div>
-            </div>
-
-            <div class="action-box">
-              <strong>⚡ Action Required:</strong>
-              <ul style="margin:10px 0;padding-left:20px">
-                <li>Reply to <strong>${userContactEmail}</strong> with your ${method === "crypto" ? "wallet address" : "bank account"} details</li>
-                <li>Include reference <strong>${reference}</strong> in your response</li>
-                <li>Update the deposit status once confirmed</li>
-              </ul>
-            </div>
-          </div>
-          <div class="footer">
-            <p>&copy; ${new Date().getFullYear()} ${emailConfig.appName} Admin Panel</p>
-          </div>
-        </div>
-      </body>
-      </html>
+    const body = `
+      ${badge("Manual Deposit Request", "#f97316")}
+      <br><br>
+      ${sectionHeading("Manual Deposit Request")}
+      ${paragraph("A user has submitted a manual deposit request and is awaiting payment instructions.")}
+      ${bigAmount(`$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, "#f97316")}
+      ${detailTable(
+        detailRow("Reference", reference) +
+        detailRow("Method", methodLabel) +
+        detailRow("User", userName) +
+        detailRow("Account Email", userEmail) +
+        detailRow("Send Instructions To", `<strong>${userContactEmail}</strong>`) +
+        detailRow("Submitted", new Date().toLocaleString())
+      )}
+      ${warningBox(`
+        <p style="margin:0 0 8px; font-size:14px; font-weight:600; color:#92400e;">Action Required:</p>
+        <ul style="margin:0; padding-left:18px; font-size:14px; color:#92400e;">
+          <li style="margin-bottom:4px;">Reply to <strong>${userContactEmail}</strong> with your ${method === "crypto" ? "wallet address" : "bank account"} details</li>
+          <li style="margin-bottom:4px;">Include reference <strong>${reference}</strong> in your response</li>
+          <li>Update the deposit status once confirmed</li>
+        </ul>
+      `)}
+      <p style="margin:20px 0 0; font-size:13px; color:#9ca3af;">${emailConfig.appName} Admin Panel</p>
     `;
 
     await transporter.sendMail({
       from: emailConfig.from,
       to: adminEmail,
       subject: `[Manual Deposit] $${amount.toFixed(2)} via ${methodLabel} — ${reference}`,
-      html,
-      text: `Manual deposit request\n\nReference: ${reference}\nAmount: $${amount.toFixed(2)}\nMethod: ${methodLabel}\nUser: ${userName} (${userEmail})\nSend instructions to: ${userContactEmail}\nSubmitted: ${new Date().toLocaleString()}\n\nAction required: send payment instructions to ${userContactEmail}`,
+      html: emailWrapper({ preheader: `Manual deposit $${amount.toFixed(2)} from ${userName} awaiting instructions.`, body }),
+      text: `Manual deposit request\n\nReference: ${reference}\nAmount: $${amount.toFixed(2)}\nMethod: ${methodLabel}\nUser: ${userName} (${userEmail})\nSend instructions to: ${userContactEmail}\nSubmitted: ${new Date().toLocaleString()}`,
     });
 
     console.log(`✅ Admin manual deposit notification sent to ${adminEmail} — ${reference}`);
@@ -622,66 +440,51 @@ export async function notifyAdminWithdrawal(
 ): Promise<void> {
   try {
     const adminEmail = env.ADMIN_EMAIL;
-    if (!adminEmail || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      console.log("⚠️  Admin email not configured, skipping withdrawal notification");
-      return;
-    }
+    if (!adminEmail || !process.env.SMTP_USER || !process.env.SMTP_PASS) return;
 
     const methodLabel = method === "crypto"
       ? `Cryptocurrency (${details.cryptoType || "Unknown"}) — ${details.network || ""}`
       : "Bank Transfer";
 
-    const destinationHtml = method === "crypto"
-      ? `<div class="detail-row"><strong>Wallet Address:</strong> <code>${details.walletAddress || "N/A"}</code></div>
-         <div class="detail-row"><strong>Network:</strong> ${details.network || "N/A"}</div>`
-      : `<div class="detail-row"><strong>Bank Name:</strong> ${details.bankName || "N/A"}</div>
-         <div class="detail-row"><strong>Account Name:</strong> ${details.accountName || "N/A"}</div>
-         <div class="detail-row"><strong>Account Number:</strong> ${details.accountNumber || "N/A"}</div>
-         ${details.routingNumber ? `<div class="detail-row"><strong>Routing:</strong> ${details.routingNumber}</div>` : ""}
-         ${details.swiftCode ? `<div class="detail-row"><strong>SWIFT:</strong> ${details.swiftCode}</div>` : ""}`;
+    const destinationRows = method === "crypto"
+      ? detailRow("Wallet Address", `<code style="font-family:'Courier New',monospace; font-size:12px; background:#f1f5f9; padding:2px 6px; border-radius:4px; word-break:break-all;">${details.walletAddress || "N/A"}</code>`) +
+        detailRow("Network", String(details.network || "N/A"))
+      : detailRow("Bank Name", String(details.bankName || "N/A")) +
+        detailRow("Account Name", String(details.accountName || "N/A")) +
+        detailRow("Account Number", String(details.accountNumber || "N/A")) +
+        (details.routingNumber ? detailRow("Routing", String(details.routingNumber)) : "") +
+        (details.swiftCode ? detailRow("SWIFT", String(details.swiftCode)) : "");
 
-    const html = `
-      <!DOCTYPE html><html><head><style>
-        body{font-family:Arial,sans-serif;line-height:1.6;color:#333}
-        .container{max-width:600px;margin:0 auto;padding:20px}
-        .header{background:linear-gradient(135deg,#ef4444 0%,#dc2626 100%);color:white;padding:25px 30px;border-radius:10px 10px 0 0}
-        .content{background:#f9f9f9;padding:30px;border-radius:0 0 10px 10px}
-        .box{background:#fff;border-left:4px solid #ef4444;padding:20px;margin:20px 0;border-radius:5px}
-        .detail-row{padding:8px 0;border-bottom:1px solid #eee}
-        .amount{font-size:28px;font-weight:bold;color:#ef4444;margin:15px 0}
-        .action{background:#fef2f2;border:1px solid #fca5a5;padding:15px;margin:20px 0;border-radius:8px}
-        code{background:#f1f5f9;padding:2px 6px;border-radius:4px;font-size:13px;word-break:break-all}
-        .footer{text-align:center;padding:20px;color:#666;font-size:12px}
-      </style></head><body>
-      <div class="container">
-        <div class="header"><h2 style="margin:0">💸 Withdrawal Request</h2><p style="margin:5px 0 0">Action required: process and send funds</p></div>
-        <div class="content">
-          <p>A user has submitted a withdrawal request.</p>
-          <div class="box">
-            <div class="amount">$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-            <div class="detail-row"><strong>Reference:</strong> ${reference}</div>
-            <div class="detail-row"><strong>Method:</strong> ${methodLabel}</div>
-            <div class="detail-row"><strong>User:</strong> ${userName} (${userEmail})</div>
-            ${destinationHtml}
-            <div class="detail-row"><strong>Submitted:</strong> ${new Date().toLocaleString()}</div>
-          </div>
-          <div class="action"><strong>⚡ Action Required:</strong>
-            <ul style="margin:10px 0;padding-left:20px">
-              <li>Verify user balance before processing</li>
-              <li>Send funds to the ${method === "crypto" ? "wallet address" : "bank account"} above</li>
-              <li>Include reference <strong>${reference}</strong> in transfer notes</li>
-              <li>Update withdrawal status once sent</li>
-            </ul>
-          </div>
-        </div>
-        <div class="footer"><p>&copy; ${new Date().getFullYear()} ${emailConfig.appName} Admin Panel</p></div>
-      </div></body></html>`;
+    const body = `
+      ${badge("Withdrawal Request", "#ef4444")}
+      <br><br>
+      ${sectionHeading("Withdrawal Request")}
+      ${paragraph("A user has submitted a withdrawal request. Please process and send funds.")}
+      ${bigAmount(`$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, "#ef4444")}
+      ${detailTable(
+        detailRow("Reference", reference) +
+        detailRow("Method", methodLabel) +
+        detailRow("User", `${userName} (${userEmail})`) +
+        destinationRows +
+        detailRow("Submitted", new Date().toLocaleString())
+      )}
+      ${dangerBox(`
+        <p style="margin:0 0 8px; font-size:14px; font-weight:600; color:#b91c1c;">Action Required:</p>
+        <ul style="margin:0; padding-left:18px; font-size:14px; color:#7f1d1d;">
+          <li style="margin-bottom:4px;">Verify user balance before processing</li>
+          <li style="margin-bottom:4px;">Send funds to the ${method === "crypto" ? "wallet address" : "bank account"} above</li>
+          <li style="margin-bottom:4px;">Include reference <strong>${reference}</strong> in transfer notes</li>
+          <li>Update withdrawal status once sent</li>
+        </ul>
+      `)}
+      <p style="margin:20px 0 0; font-size:13px; color:#9ca3af;">${emailConfig.appName} Admin Panel</p>
+    `;
 
     await transporter.sendMail({
       from: emailConfig.from,
       to: adminEmail,
       subject: `[Withdrawal] $${amount.toFixed(2)} via ${method === "crypto" ? (details.cryptoType as string) || "Crypto" : "Bank"} — ${reference}`,
-      html,
+      html: emailWrapper({ preheader: `Withdrawal request $${amount.toFixed(2)} from ${userName} needs processing.`, body }),
       text: `Withdrawal request\n\nReference: ${reference}\nAmount: $${amount.toFixed(2)}\nMethod: ${methodLabel}\nUser: ${userName} (${userEmail})\nSubmitted: ${new Date().toLocaleString()}\n\nAction: process and send funds.`,
     });
 
@@ -706,81 +509,44 @@ export async function notifyAdminPaymentReceipt(
 ): Promise<void> {
   try {
     const adminEmail = env.ADMIN_EMAIL;
-    if (!adminEmail || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      console.log("⚠️  Admin email not configured, skipping receipt notification");
-      return;
-    }
+    if (!adminEmail || !process.env.SMTP_USER || !process.env.SMTP_PASS) return;
 
     const methodLabel = method === "crypto" ? "Cryptocurrency" : method === "bank" ? "Bank Transfer" : "Card";
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 25px 30px; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .receipt-box { background: #fff; border-left: 4px solid #10b981; padding: 20px; margin: 20px 0; border-radius: 5px; }
-          .detail-row { padding: 8px 0; border-bottom: 1px solid #eee; }
-          .amount { font-size: 28px; font-weight: bold; color: #10b981; margin: 15px 0; }
-          .action-box { background: #f0fdf4; border: 1px solid #86efac; padding: 15px; margin: 20px 0; border-radius: 8px; }
-          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h2 style="margin:0">🧾 Payment Receipt Received</h2>
-            <p style="margin:5px 0 0">A user has uploaded proof of payment</p>
-          </div>
-          <div class="content">
-            <p>A payment receipt has been submitted for a pending deposit. Please verify and process accordingly.</p>
-
-            <div class="receipt-box">
-              <div class="amount">$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-              <div class="detail-row"><strong>Reference:</strong> ${reference}</div>
-              <div class="detail-row"><strong>Method:</strong> ${methodLabel}</div>
-              <div class="detail-row"><strong>User:</strong> ${userName}</div>
-              <div class="detail-row"><strong>Email:</strong> ${userEmail}</div>
-              <div class="detail-row"><strong>File:</strong> ${fileName}</div>
-              <div class="detail-row"><strong>Submitted:</strong> ${new Date().toLocaleString()}</div>
-            </div>
-
-            <div class="action-box">
-              <strong>⚡ Action Required:</strong>
-              <ul style="margin:10px 0;padding-left:20px">
-                <li>Review the attached payment receipt</li>
-                <li>Verify the transfer matches reference <strong>${reference}</strong></li>
-                <li>Credit the user's account once confirmed</li>
-                <li>Update deposit status to completed</li>
-              </ul>
-            </div>
-
-            <p style="color:#666;font-size:13px">The receipt file is attached to this email.</p>
-          </div>
-          <div class="footer">
-            <p>&copy; ${new Date().getFullYear()} ${emailConfig.appName} Admin Panel</p>
-          </div>
-        </div>
-      </body>
-      </html>
+    const body = `
+      ${badge("Payment Receipt", "#10b981")}
+      <br><br>
+      ${sectionHeading("Payment Receipt Received")}
+      ${paragraph("A user has uploaded a payment receipt for a pending deposit. Please review and process accordingly.")}
+      ${bigAmount(`$${amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, "#10b981")}
+      ${detailTable(
+        detailRow("Reference", reference) +
+        detailRow("Method", methodLabel) +
+        detailRow("User", userName) +
+        detailRow("Email", userEmail) +
+        detailRow("File", fileName) +
+        detailRow("Submitted", new Date().toLocaleString())
+      )}
+      ${successBox(`
+        <p style="margin:0 0 8px; font-size:14px; font-weight:600; color:#15803d;">Action Required:</p>
+        <ul style="margin:0; padding-left:18px; font-size:14px; color:#166534;">
+          <li style="margin-bottom:4px;">Review the attached payment receipt</li>
+          <li style="margin-bottom:4px;">Verify transfer matches reference <strong>${reference}</strong></li>
+          <li style="margin-bottom:4px;">Credit the user's account once confirmed</li>
+          <li>Update deposit status to completed</li>
+        </ul>
+      `)}
+      <p style="margin:8px 0 20px; font-size:13px; color:#6b7280;">The receipt file is attached to this email.</p>
+      <p style="margin:0; font-size:13px; color:#9ca3af;">${emailConfig.appName} Admin Panel</p>
     `;
 
     await transporter.sendMail({
       from: emailConfig.from,
       to: adminEmail,
       subject: `[Payment Receipt] $${amount.toFixed(2)} — ${reference}`,
-      html,
+      html: emailWrapper({ preheader: `Payment receipt uploaded for $${amount.toFixed(2)} — ${reference}.`, body }),
       text: `Payment receipt uploaded\n\nReference: ${reference}\nAmount: $${amount.toFixed(2)}\nMethod: ${methodLabel}\nUser: ${userName} (${userEmail})\nFile: ${fileName}\nSubmitted: ${new Date().toLocaleString()}\n\nAction: review receipt and credit account.`,
-      attachments: [
-        {
-          filename: fileName,
-          content: fileBuffer,
-          contentType: mimeType,
-        },
-      ],
+      attachments: [{ filename: fileName, content: fileBuffer, contentType: mimeType }],
     });
 
     console.log(`✅ Admin payment receipt notification sent to ${adminEmail} — ${reference}`);
@@ -790,7 +556,7 @@ export async function notifyAdminPaymentReceipt(
 }
 
 /**
- * Send transaction notification
+ * Send transaction notification to user
  */
 export async function sendTransactionNotification(
   userId: string,
@@ -805,82 +571,37 @@ export async function sendTransactionNotification(
       select: { firstName: true, balance: true },
     });
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .transaction-box { background: #fff; padding: 20px; margin: 20px 0; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-          .amount { font-size: 32px; font-weight: bold; color: #667eea; margin: 20px 0; }
-          .detail-row { padding: 10px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
-          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>💳 Transaction Notification</h1>
-            <p>${transactionType.replace("_", " ").toUpperCase()}</p>
-          </div>
-          <div class="content">
-            <p>Hello ${user?.firstName || "User"},</p>
-            <p>A transaction has been processed on your account.</p>
+    const typeLabel = transactionType.replace(/_/g, " ").toUpperCase();
 
-            <div class="transaction-box">
-              <div class="amount">$${amount.toFixed(2)}</div>
-              <div class="detail-row">
-                <span>Type:</span>
-                <span><strong>${transactionType.replace("_", " ").toUpperCase()}</strong></span>
-              </div>
-              <div class="detail-row">
-                <span>Description:</span>
-                <span>${description}</span>
-              </div>
-              <div class="detail-row">
-                <span>Time:</span>
-                <span>${new Date().toLocaleString()}</span>
-              </div>
-              <div class="detail-row">
-                <span>New Balance:</span>
-                <span><strong>$${(user?.balance || 0).toFixed(2)}</strong></span>
-              </div>
-            </div>
-
-            <p>
-              <a href="${emailConfig.appUrl}/dashboard/transactions"
-                 style="display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 10px 0;">
-                View Transaction History
-              </a>
-            </p>
-          </div>
-          <div class="footer">
-            <p>&copy; ${new Date().getFullYear()} ${emailConfig.appName}. All rights reserved.</p>
-            <p><a href="${emailConfig.appUrl}/dashboard/settings?tab=notifications">Manage notification preferences</a></p>
-          </div>
-        </div>
-      </body>
-      </html>
+    const body = `
+      ${sectionHeading("Transaction Notification")}
+      ${paragraph(`Hello <strong>${user?.firstName || "there"}</strong>,`)}
+      ${paragraph("A transaction has been processed on your account.")}
+      ${bigAmount(`$${amount.toFixed(2)}`)}
+      ${detailTable(
+        detailRow("Type", typeLabel) +
+        detailRow("Description", description) +
+        detailRow("Time", new Date().toLocaleString()) +
+        detailRow("New Balance", `<strong>$${(user?.balance || 0).toFixed(2)}</strong>`)
+      )}
+      ${ctaButton("View Transaction History", `${emailConfig.appUrl}/dashboard/transactions`)}
+      <p style="margin:20px 0 0; font-size:14px; color:#9ca3af;">Regards,<br><strong style="color:#374151;">${emailConfig.appName} Team</strong></p>
     `;
 
     await sendEmailNotification(
       userId,
       {
         to: userEmail,
-        subject: `💳 ${transactionType.replace("_", " ").toUpperCase()} - $${amount.toFixed(2)}`,
-        html,
+        subject: `Transaction processed: ${typeLabel} — $${amount.toFixed(2)}`,
+        html: emailWrapper({ preheader: `${typeLabel} of $${amount.toFixed(2)} processed on your account.`, body }),
       },
       NotificationType.EMAIL
     );
 
-    // Also create in-app notification
     await createInAppNotification(
       userId,
       "transaction",
-      `${transactionType.replace("_", " ").toUpperCase()}`,
+      typeLabel,
       `$${amount.toFixed(2)} - ${description}`
     );
   } catch (error) {
@@ -905,84 +626,33 @@ export async function sendTransferSentNotification(
       select: { firstName: true },
     });
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .transfer-box { background: #fff; padding: 20px; margin: 20px 0; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-          .amount { font-size: 32px; font-weight: bold; color: #ef4444; margin: 20px 0; text-align: center; }
-          .detail-row { padding: 10px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
-          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
-          .btn { display: inline-block; background: #ef4444; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 10px 0; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>💸 Transfer Sent</h1>
-            <p>Your money transfer was successful</p>
-          </div>
-          <div class="content">
-            <p>Hello ${user?.firstName || "User"},</p>
-            <p>You have successfully sent money to <strong>${recipientEmail}</strong>.</p>
-
-            <div class="transfer-box">
-              <div class="amount">-$${amount.toFixed(2)}</div>
-              <div class="detail-row">
-                <span>Recipient:</span>
-                <span><strong>${recipientEmail}</strong></span>
-              </div>
-              <div class="detail-row">
-                <span>Transfer ID:</span>
-                <span>${transferId}</span>
-              </div>
-              <div class="detail-row">
-                <span>Time:</span>
-                <span>${new Date().toLocaleString()}</span>
-              </div>
-              <div class="detail-row">
-                <span>New Balance:</span>
-                <span><strong>$${newBalance.toFixed(2)}</strong></span>
-              </div>
-            </div>
-
-            <p style="text-align: center;">
-              <a href="${emailConfig.appUrl}/dashboard/transfers" class="btn">
-                View Transfer History
-              </a>
-            </p>
-          </div>
-          <div class="footer">
-            <p>&copy; ${new Date().getFullYear()} ${emailConfig.appName}. All rights reserved.</p>
-          </div>
-        </div>
-      </body>
-      </html>
+    const body = `
+      ${sectionHeading("Transfer Sent")}
+      ${paragraph(`Hello <strong>${user?.firstName || "there"}</strong>,`)}
+      ${paragraph(`You have successfully sent money to <strong>${recipientEmail}</strong>.`)}
+      ${bigAmount(`-$${amount.toFixed(2)}`, "#ef4444")}
+      ${detailTable(
+        detailRow("Recipient", recipientEmail) +
+        detailRow("Transfer ID", transferId) +
+        detailRow("Time", new Date().toLocaleString()) +
+        detailRow("New Balance", `<strong>$${newBalance.toFixed(2)}</strong>`)
+      )}
+      ${ctaButton("View Transfer History", `${emailConfig.appUrl}/dashboard/transfers`)}
+      <p style="margin:20px 0 0; font-size:14px; color:#9ca3af;">Regards,<br><strong style="color:#374151;">${emailConfig.appName} Team</strong></p>
     `;
 
     await sendEmailNotification(
       userId,
       {
         to: userEmail,
-        subject: `💸 Transfer Sent - $${amount.toFixed(2)}`,
-        html,
-        text: `Hello ${user?.firstName || "User"},\n\nYou have successfully sent money to ${recipientEmail}.\n\nAmount: -$${amount.toFixed(2)}\nRecipient: ${recipientEmail}\nTransfer ID: ${transferId}\nTime: ${new Date().toLocaleString()}\nNew Balance: $${newBalance.toFixed(2)}\n\nView your transfer history at: ${emailConfig.appUrl}/dashboard/transfers\n\n© ${new Date().getFullYear()} ${emailConfig.appName}. All rights reserved.`,
+        subject: `Transfer sent: $${amount.toFixed(2)} to ${recipientEmail}`,
+        html: emailWrapper({ preheader: `You sent $${amount.toFixed(2)} to ${recipientEmail}.`, body }),
+        text: `Hello ${user?.firstName || "there"},\n\nYou sent $${amount.toFixed(2)} to ${recipientEmail}.\n\nTransfer ID: ${transferId}\nNew Balance: $${newBalance.toFixed(2)}\n\nView history: ${emailConfig.appUrl}/dashboard/transfers`,
       },
       NotificationType.EMAIL
     );
 
-    // Create in-app notification
-    await createInAppNotification(
-      userId,
-      "transfer",
-      "Transfer Sent",
-      `$${amount.toFixed(2)} sent to ${recipientEmail}`
-    );
+    await createInAppNotification(userId, "transfer", "Transfer Sent", `$${amount.toFixed(2)} sent to ${recipientEmail}`);
   } catch (error) {
     console.error("Error sending transfer sent notification:", error);
   }
@@ -1005,86 +675,34 @@ export async function sendTransferReceivedNotification(
       select: { firstName: true },
     });
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .transfer-box { background: #fff; padding: 20px; margin: 20px 0; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-          .amount { font-size: 32px; font-weight: bold; color: #10b981; margin: 20px 0; text-align: center; }
-          .detail-row { padding: 10px 0; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; }
-          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
-          .btn { display: inline-block; background: #10b981; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 10px 0; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>💰 Money Received</h1>
-            <p>You've received a transfer</p>
-          </div>
-          <div class="content">
-            <p>Hello ${user?.firstName || "User"},</p>
-            <p>You have received money from <strong>${senderEmail}</strong>.</p>
-
-            <div class="transfer-box">
-              <div class="amount">+$${amount.toFixed(2)}</div>
-              <div class="detail-row">
-                <span>From:</span>
-                <span><strong>${senderEmail}</strong></span>
-              </div>
-              <div class="detail-row">
-                <span>Transfer ID:</span>
-                <span>${transferId}</span>
-              </div>
-              <div class="detail-row">
-                <span>Time:</span>
-                <span>${new Date().toLocaleString()}</span>
-              </div>
-              <div class="detail-row">
-                <span>New Balance:</span>
-                <span><strong>$${newBalance.toFixed(2)}</strong></span>
-              </div>
-            </div>
-
-            <p style="text-align: center;">
-              <a href="${emailConfig.appUrl}/dashboard/transfers" class="btn">
-                View Transfer Details
-              </a>
-            </p>
-          </div>
-          <div class="footer">
-            <p>&copy; ${new Date().getFullYear()} ${emailConfig.appName}. All rights reserved.</p>
-          </div>
-        </div>
-      </body>
-      </html>
+    const body = `
+      ${sectionHeading("Money Received")}
+      ${paragraph(`Hello <strong>${user?.firstName || "there"}</strong>,`)}
+      ${paragraph(`You have received a transfer from <strong>${senderEmail}</strong>.`)}
+      ${bigAmount(`+$${amount.toFixed(2)}`, "#22c55e")}
+      ${detailTable(
+        detailRow("From", senderEmail) +
+        detailRow("Transfer ID", transferId) +
+        detailRow("Time", new Date().toLocaleString()) +
+        detailRow("New Balance", `<strong>$${newBalance.toFixed(2)}</strong>`)
+      )}
+      ${ctaButton("View Transfer Details", `${emailConfig.appUrl}/dashboard/transfers`, "#22c55e")}
+      <p style="margin:20px 0 0; font-size:14px; color:#9ca3af;">Regards,<br><strong style="color:#374151;">${emailConfig.appName} Team</strong></p>
     `;
 
     await sendEmailNotification(
       userId,
       {
         to: userEmail,
-        subject: `💰 Money Received - $${amount.toFixed(2)}`,
-        html,
-        text: `Hello ${user?.firstName || "User"},\n\nYou have received money from ${senderEmail}.\n\nAmount: +$${amount.toFixed(2)}\nFrom: ${senderEmail}\nTransfer ID: ${transferId}\nTime: ${new Date().toLocaleString()}\nNew Balance: $${newBalance.toFixed(2)}\n\nView your transfer history at: ${emailConfig.appUrl}/dashboard/transfers\n\n© ${new Date().getFullYear()} ${emailConfig.appName}. All rights reserved.`,
+        subject: `You received $${amount.toFixed(2)} from ${senderEmail}`,
+        html: emailWrapper({ preheader: `$${amount.toFixed(2)} has been transferred to your account.`, body }),
+        text: `Hello ${user?.firstName || "there"},\n\nYou received $${amount.toFixed(2)} from ${senderEmail}.\n\nTransfer ID: ${transferId}\nNew Balance: $${newBalance.toFixed(2)}\n\nView details: ${emailConfig.appUrl}/dashboard/transfers`,
       },
       NotificationType.EMAIL
     );
 
-    // Create in-app notification
-    await createInAppNotification(
-      userId,
-      "transfer",
-      "Money Received",
-      `$${amount.toFixed(2)} received from ${senderEmail}`
-    );
+    await createInAppNotification(userId, "transfer", "Money Received", `$${amount.toFixed(2)} received from ${senderEmail}`);
 
-    // Send real-time Socket.IO notification
     emitToUser(userId, "transfer_received", {
       amount,
       senderEmail,
@@ -1107,7 +725,6 @@ export async function sendTransferFailedNotification(
   reason: string
 ): Promise<void> {
   try {
-    // Create in-app notification only (no email spam for failed transfers)
     await createInAppNotification(
       userId,
       "transfer",
@@ -1115,7 +732,6 @@ export async function sendTransferFailedNotification(
       `Transfer of $${amount.toFixed(2)} to ${recipientEmail} failed: ${reason}`
     );
 
-    // Send real-time Socket.IO notification
     emitToUser(userId, "transfer_failed", {
       amount,
       recipientEmail,
@@ -1142,82 +758,38 @@ export async function sendReferralSuccessNotification(
       select: { firstName: true },
     });
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .bonus-box { background: #fff; padding: 20px; margin: 20px 0; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
-          .amount { font-size: 42px; font-weight: bold; color: #8b5cf6; margin: 20px 0; }
-          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
-          .btn { display: inline-block; background: #8b5cf6; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 10px 0; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>🎉 Referral Success!</h1>
-            <p>You've earned a referral bonus</p>
-          </div>
-          <div class="content">
-            <p>Hello ${referrer?.firstName || "User"},</p>
-            <p>Great news! <strong>${newUserName}</strong> just joined using your referral code, and you've earned a bonus!</p>
-
-            <div class="bonus-box">
-              <div class="amount">+$${bonus.toFixed(2)}</div>
-              <p style="color:#666;margin:10px 0">Referral Bonus</p>
-            </div>
-
-            <p style="text-align:center;color:#666">Keep sharing your referral code to earn more bonuses!</p>
-
-            <p style="text-align: center;">
-              <a href="${emailConfig.appUrl}/dashboard/referral" class="btn">
-                View Referral Dashboard
-              </a>
-            </p>
-          </div>
-          <div class="footer">
-            <p>&copy; ${new Date().getFullYear()} ${emailConfig.appName}. All rights reserved.</p>
-          </div>
-        </div>
-      </body>
-      </html>
+    const body = `
+      ${sectionHeading("Referral Bonus Earned!")}
+      ${paragraph(`Hello <strong>${referrer?.firstName || "there"}</strong>,`)}
+      ${paragraph(`Great news! <strong>${newUserName}</strong> just joined ${emailConfig.appName} using your referral code, and you've earned a bonus!`)}
+      ${bigAmount(`+$${bonus.toFixed(2)}`, "#8b5cf6")}
+      ${infoBox(`<p style="margin:0; font-size:14px; color:#374151; text-align:center;">Keep sharing your referral code to earn more bonuses every time someone joins!</p>`)}
+      ${ctaButton("View Referral Dashboard", `${emailConfig.appUrl}/dashboard/referral`, "#8b5cf6")}
+      <p style="margin:20px 0 0; font-size:14px; color:#9ca3af;">Regards,<br><strong style="color:#374151;">${emailConfig.appName} Team</strong></p>
     `;
 
     await sendEmailNotification(
       referrerId,
       {
         to: referrerEmail,
-        subject: `🎉 You earned $${bonus.toFixed(2)} - Referral Bonus!`,
-        html,
-        text: `Hello ${referrer?.firstName || "User"},\n\nGreat news! ${newUserName} just joined using your referral code, and you've earned a $${bonus.toFixed(2)} bonus!\n\nKeep sharing your referral code to earn more bonuses!\n\nView your referral dashboard: ${emailConfig.appUrl}/dashboard/referral\n\n© ${new Date().getFullYear()} ${emailConfig.appName}. All rights reserved.`,
+        subject: `You earned $${bonus.toFixed(2)} — Referral bonus from ${newUserName}`,
+        html: emailWrapper({ preheader: `${newUserName} joined using your referral. You earned $${bonus.toFixed(2)}!`, body }),
+        text: `Hello ${referrer?.firstName || "there"},\n\n${newUserName} joined using your referral code and you earned $${bonus.toFixed(2)}!\n\nView your referral dashboard: ${emailConfig.appUrl}/dashboard/referral`,
       },
       NotificationType.EMAIL
     );
 
-    // Create in-app notification
-    await createInAppNotification(
-      referrerId,
-      "referral",
-      "Referral Bonus Earned!",
-      `${newUserName} joined using your code. You earned $${bonus.toFixed(2)}!`
-    );
+    await createInAppNotification(referrerId, "referral", "Referral Bonus Earned!", `${newUserName} joined using your code. You earned $${bonus.toFixed(2)}!`);
 
-    // Send real-time Socket.IO notification
-    emitToUser(referrerId, "referral_success", {
-      newUserName,
-      bonus,
-      timestamp: new Date().toISOString(),
-    });
+    emitToUser(referrerId, "referral_success", { newUserName, bonus, timestamp: new Date().toISOString() });
   } catch (error) {
     console.error("Error sending referral success notification:", error);
   }
 }
 
+/**
+ * Send welcome bonus notification to new user
+ */
 export async function sendWelcomeBonusNotification(
   newUserId: string,
   newUserEmail: string,
@@ -1226,84 +798,37 @@ export async function sendWelcomeBonusNotification(
   bonus: number
 ): Promise<void> {
   try {
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .bonus-box { background: #fff; padding: 20px; margin: 20px 0; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
-          .amount { font-size: 42px; font-weight: bold; color: #8b5cf6; margin: 20px 0; }
-          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
-          .btn { display: inline-block; background: #8b5cf6; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 10px 0; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>🎉 Welcome Bonus!</h1>
-            <p>You've received a signup bonus</p>
-          </div>
-          <div class="content">
-            <p>Hello ${newUserName},</p>
-            <p>Welcome to ${emailConfig.appName}! Since you joined via <strong>${referrerName}'s</strong> referral, you've received a welcome bonus!</p>
-
-            <div class="bonus-box">
-              <div class="amount">+$${bonus.toFixed(2)}</div>
-              <p style="color:#666;margin:10px 0">Welcome Bonus</p>
-            </div>
-
-            <p style="text-align:center;color:#666">Start investing today and grow your wealth with us!</p>
-
-            <p style="text-align: center;">
-              <a href="${emailConfig.appUrl}/dashboard" class="btn">
-                Go to Dashboard
-              </a>
-            </p>
-          </div>
-          <div class="footer">
-            <p>&copy; ${new Date().getFullYear()} ${emailConfig.appName}. All rights reserved.</p>
-          </div>
-        </div>
-      </body>
-      </html>
+    const body = `
+      ${sectionHeading("Welcome Bonus Received!")}
+      ${paragraph(`Hello <strong>${newUserName}</strong>,`)}
+      ${paragraph(`Welcome to <strong>${emailConfig.appName}</strong>! Since you joined via <strong>${referrerName}'s</strong> referral, we've added a welcome bonus to your account.`)}
+      ${bigAmount(`+$${bonus.toFixed(2)}`, "#8b5cf6")}
+      ${successBox(`<p style="margin:0; font-size:14px; color:#166534; text-align:center;">Your welcome bonus has been added to your account. Start investing today and grow your wealth!</p>`)}
+      ${ctaButton("Go to Dashboard", `${emailConfig.appUrl}/dashboard`, "#8b5cf6")}
+      <p style="margin:20px 0 0; font-size:14px; color:#9ca3af;">Regards,<br><strong style="color:#374151;">${emailConfig.appName} Team</strong></p>
     `;
 
     await sendEmailNotification(
       newUserId,
       {
         to: newUserEmail,
-        subject: `🎉 Welcome! You received $${bonus.toFixed(2)} bonus`,
-        html,
-        text: `Hello ${newUserName},\n\nWelcome to ${emailConfig.appName}! Since you joined via ${referrerName}'s referral, you've received a $${bonus.toFixed(2)} welcome bonus!\n\nStart investing today and grow your wealth with us!\n\nGo to Dashboard: ${emailConfig.appUrl}/dashboard\n\n© ${new Date().getFullYear()} ${emailConfig.appName}. All rights reserved.`,
+        subject: `Welcome! You've received a $${bonus.toFixed(2)} bonus — ${emailConfig.appName}`,
+        html: emailWrapper({ preheader: `You received a $${bonus.toFixed(2)} welcome bonus for joining via referral.`, body }),
+        text: `Hello ${newUserName},\n\nWelcome to ${emailConfig.appName}! You received a $${bonus.toFixed(2)} welcome bonus for joining via ${referrerName}'s referral.\n\nGo to Dashboard: ${emailConfig.appUrl}/dashboard`,
       },
       NotificationType.EMAIL
     );
 
-    // Create in-app notification
-    await createInAppNotification(
-      newUserId,
-      "referral",
-      "Welcome Bonus Received!",
-      `You received $${bonus.toFixed(2)} for joining via ${referrerName}'s referral. Start investing today!`
-    );
+    await createInAppNotification(newUserId, "referral", "Welcome Bonus Received!", `You received $${bonus.toFixed(2)} for joining via ${referrerName}'s referral. Start investing today!`);
 
-    // Send real-time Socket.IO notification
-    emitToUser(newUserId, "welcome_bonus", {
-      referrerName,
-      bonus,
-      timestamp: new Date().toISOString(),
-    });
+    emitToUser(newUserId, "welcome_bonus", { referrerName, bonus, timestamp: new Date().toISOString() });
   } catch (error) {
     console.error("Error sending welcome bonus notification:", error);
   }
 }
 
 /**
- * Send welcome email to newsletter subscriber
+ * Send newsletter welcome email
  */
 export async function sendNewsletterWelcomeEmail(
   email: string,
@@ -1317,68 +842,30 @@ export async function sendNewsletterWelcomeEmail(
 
     const subscriberName = firstName || "there";
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 40px 30px; text-align: center; border-radius: 10px 10px 0 0; }
-          .header h1 { margin: 0; font-size: 28px; font-weight: 600; }
-          .content { background: #f9f9f9; padding: 40px 30px; border-radius: 0 0 10px 10px; }
-          .welcome-box { background: #fff; padding: 25px; margin: 25px 0; border-radius: 8px; border-left: 4px solid #667eea; }
-          .button { display: inline-block; background: #667eea; color: white; padding: 14px 35px; text-decoration: none; border-radius: 30px; margin: 20px 0; font-weight: bold; }
-          .footer { text-align: center; padding: 25px 20px; color: #888; font-size: 12px; }
-          .footer a { color: #667eea; text-decoration: none; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h1>🎉 Welcome to Our Newsletter!</h1>
-          </div>
-          <div class="content">
-            <p style="font-size: 18px;">Hello ${subscriberName},</p>
-
-            <div class="welcome-box">
-              <p style="margin: 0; font-size: 16px;">Thank you for subscribing to the ${emailConfig.appName} newsletter! We're excited to have you as part of our community.</p>
-            </div>
-
-            <p>You'll now receive:</p>
-            <ul style="line-height: 2;">
-              <li>📰 Latest updates and news</li>
-              <li>💡 Exclusive investment tips and insights</li>
-              <li>🎁 Special offers and promotions</li>
-              <li>📊 Market trends and analysis</li>
-            </ul>
-
-            <p style="text-align: center;">
-              <a href="${emailConfig.appUrl}" class="button">
-                Visit Our Website
-              </a>
-            </p>
-
-            <p style="color: #666; font-size: 14px; margin-top: 30px;">You can unsubscribe at any time by clicking the unsubscribe link in any of our emails.</p>
-          </div>
-          <div class="footer">
-            <p>&copy; ${new Date().getFullYear()} ${emailConfig.appName}. All rights reserved.</p>
-            <p>
-              <a href="${emailConfig.appUrl}">Visit Website</a> |
-              <a href="${emailConfig.appUrl}/contact">Contact Us</a>
-            </p>
-          </div>
-        </div>
-      </body>
-      </html>
+    const body = `
+      ${sectionHeading("Welcome to Our Newsletter!")}
+      ${paragraph(`Hello <strong>${subscriberName}</strong>,`)}
+      ${paragraph(`Thank you for subscribing to the <strong>${emailConfig.appName}</strong> newsletter. We're excited to have you in our community.`)}
+      ${successBox(`
+        <p style="margin:0 0 12px; font-size:14px; font-weight:600; color:#15803d;">Here's what you'll receive:</p>
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+          <tr><td style="padding:5px 0; font-size:14px; color:#166534;">&#128240;&nbsp; Latest platform updates and news</td></tr>
+          <tr><td style="padding:5px 0; font-size:14px; color:#166534;">&#128161;&nbsp; Exclusive investment tips and market insights</td></tr>
+          <tr><td style="padding:5px 0; font-size:14px; color:#166534;">&#127873;&nbsp; Special offers and promotions</td></tr>
+          <tr><td style="padding:5px 0; font-size:14px; color:#166534;">&#128202;&nbsp; Market trends and performance analysis</td></tr>
+        </table>
+      `)}
+      ${ctaButton("Visit Our Website", emailConfig.appUrl)}
+      ${paragraph(`You can unsubscribe at any time by clicking the unsubscribe link in any of our emails. We respect your inbox.`)}
+      <p style="margin:20px 0 0; font-size:14px; color:#9ca3af;">Regards,<br><strong style="color:#374151;">${emailConfig.appName} Team</strong></p>
     `;
 
     await transporter.sendMail({
       from: emailConfig.from,
       to: email,
-      subject: `Welcome to ${emailConfig.appName} Newsletter! 🎉`,
-      html,
-      text: `Hello ${subscriberName},\n\nThank you for subscribing to the ${emailConfig.appName} newsletter! We're excited to have you as part of our community.\n\nYou'll now receive:\n- Latest updates and news\n- Exclusive investment tips and insights\n- Special offers and promotions\n- Market trends and analysis\n\nYou can unsubscribe at any time.\n\n© ${new Date().getFullYear()} ${emailConfig.appName}. All rights reserved.`,
+      subject: `Welcome to the ${emailConfig.appName} Newsletter`,
+      html: emailWrapper({ preheader: "You're now subscribed to the Alvarado newsletter. Here's what to expect.", body }),
+      text: `Hello ${subscriberName},\n\nThank you for subscribing to the ${emailConfig.appName} newsletter!\n\nYou'll receive: updates, investment tips, offers, and market analysis.\n\nVisit us: ${emailConfig.appUrl}`,
     });
 
     console.log(`✅ Newsletter welcome email sent to ${email}`);
@@ -1398,62 +885,30 @@ export async function sendContactFormToAdmin(
 ): Promise<void> {
   try {
     const adminEmail = env.ADMIN_EMAIL;
-    if (!adminEmail || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      console.log("⚠️  Admin email not configured, skipping contact form notification");
-      return;
-    }
+    if (!adminEmail || !process.env.SMTP_USER || !process.env.SMTP_PASS) return;
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 25px 30px; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .contact-box { background: #fff; border-left: 4px solid #667eea; padding: 20px; margin: 20px 0; border-radius: 5px; }
-          .detail-row { padding: 8px 0; border-bottom: 1px solid #eee; }
-          .message-box { background: #f8f9fa; padding: 20px; margin: 20px 0; border-radius: 5px; border: 1px solid #dee2e6; white-space: pre-wrap; }
-          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
-          .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; color: white; background: #667eea; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h2 style="margin:0">📨 New Contact Form Submission</h2>
-            <p style="margin:5px 0 0">Someone has sent you a message</p>
-          </div>
-          <div class="content">
-            <p><span class="badge">NEW MESSAGE</span></p>
-
-            <div class="contact-box">
-              <div class="detail-row"><strong>Name:</strong> ${name}</div>
-              <div class="detail-row"><strong>Email:</strong> <a href="mailto:${email}">${email}</a></div>
-              <div class="detail-row"><strong>Phone:</strong> ${phone}</div>
-              <div class="detail-row"><strong>Received:</strong> ${new Date().toLocaleString()}</div>
-            </div>
-
-            <p><strong>Message:</strong></p>
-            <div class="message-box">${message}</div>
-
-            <p style="color:#666;font-size:14px;">You can reply directly to this message by responding to <a href="mailto:${email}">${email}</a></p>
-          </div>
-          <div class="footer">
-            <p>&copy; ${new Date().getFullYear()} ${emailConfig.appName} Contact Form</p>
-          </div>
-        </div>
-      </body>
-      </html>
+    const body = `
+      ${badge("New Message", BRAND_PRIMARY)}
+      <br><br>
+      ${sectionHeading("New Contact Form Submission")}
+      ${paragraph("Someone has submitted a message through the website contact form.")}
+      ${detailTable(
+        detailRow("Name", name) +
+        detailRow("Email", `<a href="mailto:${email}" style="color:${BRAND_PRIMARY}; text-decoration:none;">${email}</a>`) +
+        detailRow("Phone", phone) +
+        detailRow("Received", new Date().toLocaleString())
+      )}
+      ${infoBox(`<p style="margin:0 0 8px; font-size:14px; font-weight:600; color:#374151;">Message:</p><p style="margin:0; font-size:14px; color:#374151; white-space:pre-wrap;">${message}</p>`)}
+      ${paragraph(`You can reply directly to <a href="mailto:${email}" style="color:${BRAND_PRIMARY}; text-decoration:none;">${email}</a>.`)}
+      <p style="margin:20px 0 0; font-size:13px; color:#9ca3af;">${emailConfig.appName} Contact Form</p>
     `;
 
     await transporter.sendMail({
       from: emailConfig.from,
       to: adminEmail,
-      replyTo: email, // Allow admin to reply directly
-      subject: `📨 New Contact Form: ${name} - ${emailConfig.appName}`,
-      html,
+      replyTo: email,
+      subject: `New Contact Form: ${name} — ${emailConfig.appName}`,
+      html: emailWrapper({ preheader: `New contact form message from ${name}.`, body }),
       text: `New contact form submission\n\nName: ${name}\nEmail: ${email}\nPhone: ${phone}\nReceived: ${new Date().toLocaleString()}\n\nMessage:\n${message}\n\nReply to: ${email}`,
     });
 
@@ -1475,59 +930,30 @@ export async function notifyAdminNewUserSignup(
 ): Promise<void> {
   try {
     const adminEmail = env.ADMIN_EMAIL;
-    if (!adminEmail || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      console.log("⚠️  Admin email not configured, skipping new user signup notification");
-      return;
-    }
+    if (!adminEmail || !process.env.SMTP_USER || !process.env.SMTP_PASS) return;
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 25px 30px; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .user-box { background: #fff; border-left: 4px solid #10b981; padding: 20px; margin: 20px 0; border-radius: 5px; }
-          .detail-row { padding: 8px 0; border-bottom: 1px solid #eee; }
-          .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; color: white; background: #10b981; }
-          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h2 style="margin:0">👤 New User Registration</h2>
-            <p style="margin:5px 0 0">A new user has joined the platform</p>
-          </div>
-          <div class="content">
-            <p><span class="badge">NEW USER</span></p>
-
-            <div class="user-box">
-              <div class="detail-row"><strong>Name:</strong> ${userName}</div>
-              <div class="detail-row"><strong>Email:</strong> ${userEmail}</div>
-              <div class="detail-row"><strong>User ID:</strong> ${userId}</div>
-              ${referralCode ? `<div class="detail-row"><strong>Referral Code Used:</strong> ${referralCode}</div>` : ""}
-              ${referrerName ? `<div class="detail-row"><strong>Referred By:</strong> ${referrerName}</div>` : ""}
-              <div class="detail-row"><strong>Registration Time:</strong> ${new Date().toLocaleString()}</div>
-            </div>
-
-            <p style="color:#666;font-size:14px">You can view and manage this user from the admin dashboard.</p>
-          </div>
-          <div class="footer">
-            <p>&copy; ${new Date().getFullYear()} ${emailConfig.appName} Admin Panel</p>
-          </div>
-        </div>
-      </body>
-      </html>
+    const body = `
+      ${badge("New User", "#10b981")}
+      <br><br>
+      ${sectionHeading("New User Registration")}
+      ${paragraph("A new user has joined the platform.")}
+      ${detailTable(
+        detailRow("Name", userName) +
+        detailRow("Email", userEmail) +
+        detailRow("User ID", userId) +
+        (referralCode ? detailRow("Referral Code Used", referralCode) : "") +
+        (referrerName ? detailRow("Referred By", referrerName) : "") +
+        detailRow("Registration Time", new Date().toLocaleString())
+      )}
+      ${paragraph("You can view and manage this user from the admin dashboard.")}
+      <p style="margin:20px 0 0; font-size:13px; color:#9ca3af;">${emailConfig.appName} Admin Panel</p>
     `;
 
     await transporter.sendMail({
       from: emailConfig.from,
       to: adminEmail,
-      subject: `👤 New User Registration: ${userName} (${userEmail})`,
-      html,
+      subject: `New User Registration: ${userName} (${userEmail})`,
+      html: emailWrapper({ preheader: `New user ${userName} just joined the platform.`, body }),
       text: `New user registration\n\nName: ${userName}\nEmail: ${userEmail}\nUser ID: ${userId}${referralCode ? `\nReferral Code: ${referralCode}` : ""}${referrerName ? `\nReferred By: ${referrerName}` : ""}\nRegistration Time: ${new Date().toLocaleString()}`,
     });
 
@@ -1551,59 +977,31 @@ export async function notifyAdminUserSignin(
 ): Promise<void> {
   try {
     const adminEmail = env.ADMIN_EMAIL;
-    if (!adminEmail || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      console.log("⚠️  Admin email not configured, skipping user signin notification");
-      return;
-    }
+    if (!adminEmail || !process.env.SMTP_USER || !process.env.SMTP_PASS) return;
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: white; padding: 25px 30px; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .signin-box { background: #fff; border-left: 4px solid #3b82f6; padding: 20px; margin: 20px 0; border-radius: 5px; }
-          .detail-row { padding: 8px 0; border-bottom: 1px solid #eee; }
-          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h2 style="margin:0">🔐 User Sign-In Activity</h2>
-            <p style="margin:5px 0 0">A user has signed into the platform</p>
-          </div>
-          <div class="content">
-            <div class="signin-box">
-              <div class="detail-row"><strong>User:</strong> ${userName}</div>
-              <div class="detail-row"><strong>Email:</strong> ${userEmail}</div>
-              <div class="detail-row"><strong>User ID:</strong> ${userId}</div>
-              <div class="detail-row"><strong>Device:</strong> ${device}</div>
-              <div class="detail-row"><strong>Browser:</strong> ${browser}</div>
-              <div class="detail-row"><strong>Location:</strong> ${location}</div>
-              <div class="detail-row"><strong>IP Address:</strong> ${ipAddress}</div>
-              <div class="detail-row"><strong>Sign-In Time:</strong> ${new Date().toLocaleString()}</div>
-            </div>
-
-            <p style="color:#666;font-size:14px">This is an automated notification for user sign-in activity monitoring.</p>
-          </div>
-          <div class="footer">
-            <p>&copy; ${new Date().getFullYear()} ${emailConfig.appName} Admin Panel</p>
-          </div>
-        </div>
-      </body>
-      </html>
+    const body = `
+      ${sectionHeading("User Sign-In Activity")}
+      ${paragraph("A user has signed into the platform.")}
+      ${detailTable(
+        detailRow("User", userName) +
+        detailRow("Email", userEmail) +
+        detailRow("User ID", userId) +
+        detailRow("Device", device) +
+        detailRow("Browser", browser) +
+        detailRow("Location", location) +
+        detailRow("IP Address", ipAddress) +
+        detailRow("Sign-In Time", new Date().toLocaleString())
+      )}
+      ${paragraph("This is an automated notification for user sign-in activity monitoring.")}
+      <p style="margin:20px 0 0; font-size:13px; color:#9ca3af;">${emailConfig.appName} Admin Panel</p>
     `;
 
     await transporter.sendMail({
       from: emailConfig.from,
       to: adminEmail,
-      subject: `🔐 User Sign-In: ${userName} (${userEmail}) from ${location}`,
-      html,
-      text: `User sign-in activity\n\nUser: ${userName}\nEmail: ${userEmail}\nUser ID: ${userId}\nDevice: ${device}\nBrowser: ${browser}\nLocation: ${location}\nIP Address: ${ipAddress}\nSign-In Time: ${new Date().toLocaleString()}`,
+      subject: `User Sign-In: ${userName} (${userEmail}) from ${location}`,
+      html: emailWrapper({ preheader: `${userName} signed in from ${location}.`, body }),
+      text: `User sign-in\n\nUser: ${userName}\nEmail: ${userEmail}\nUser ID: ${userId}\nDevice: ${device}\nBrowser: ${browser}\nLocation: ${location}\nIP: ${ipAddress}\nTime: ${new Date().toLocaleString()}`,
     });
 
     console.log(`✅ Admin user signin notification sent to ${adminEmail} for ${userEmail}`);
@@ -1625,10 +1023,7 @@ export async function notifyAdminKYCSubmission(
 ): Promise<void> {
   try {
     const adminEmail = env.ADMIN_EMAIL;
-    if (!adminEmail || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-      console.log("⚠️  Admin email not configured, skipping KYC submission notification");
-      return;
-    }
+    if (!adminEmail || !process.env.SMTP_USER || !process.env.SMTP_PASS) return;
 
     const docTypeLabels: Record<string, string> = {
       passport: "Passport",
@@ -1636,76 +1031,40 @@ export async function notifyAdminKYCSubmission(
       national_id: "National ID Card",
     };
 
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; padding: 25px 30px; border-radius: 10px 10px 0 0; }
-          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-          .kyc-box { background: #fff; border-left: 4px solid #f59e0b; padding: 20px; margin: 20px 0; border-radius: 5px; }
-          .detail-row { padding: 8px 0; border-bottom: 1px solid #eee; }
-          .badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; color: white; background: #f59e0b; }
-          .action-box { background: #fffbeb; border: 1px solid #fbbf24; padding: 15px; margin: 20px 0; border-radius: 8px; }
-          .footer { text-align: center; padding: 20px; color: #666; font-size: 12px; }
-          .btn { display: inline-block; background: #f59e0b; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 10px 0; font-weight: bold; }
-        </style>
-      </head>
-      <body>
-        <div class="container">
-          <div class="header">
-            <h2 style="margin:0">🆔 New KYC Verification Submitted</h2>
-            <p style="margin:5px 0 0">Action required: Review and verify documents</p>
-          </div>
-          <div class="content">
-            <p><span class="badge">PENDING REVIEW</span></p>
-
-            <p>A user has submitted their KYC verification documents and is awaiting approval.</p>
-
-            <div class="kyc-box">
-              <div class="detail-row"><strong>User:</strong> ${userName}</div>
-              <div class="detail-row"><strong>Email:</strong> ${userEmail}</div>
-              <div class="detail-row"><strong>User ID:</strong> ${userId}</div>
-              <div class="detail-row"><strong>KYC ID:</strong> ${kycId}</div>
-              <div class="detail-row"><strong>Document Type:</strong> ${docTypeLabels[documentType] || documentType}</div>
-              <div class="detail-row"><strong>Nationality:</strong> ${nationality}</div>
-              <div class="detail-row"><strong>Submitted:</strong> ${new Date().toLocaleString()}</div>
-            </div>
-
-            <div class="action-box">
-              <strong>⚡ Action Required:</strong>
-              <ul style="margin:10px 0;padding-left:20px">
-                <li>Review uploaded documents (ID, proof of address, selfie)</li>
-                <li>Verify information matches the documents</li>
-                <li>Approve or reject the KYC submission</li>
-                <li>Provide feedback if rejected</li>
-              </ul>
-            </div>
-
-            <p style="text-align: center;">
-              <a href="${emailConfig.appUrl}/admin/kyc" class="btn">
-                Review KYC Submission
-              </a>
-            </p>
-
-            <p style="color:#666;font-size:13px">Please review this submission within 24-48 hours to maintain service quality.</p>
-          </div>
-          <div class="footer">
-            <p>&copy; ${new Date().getFullYear()} ${emailConfig.appName} Admin Panel</p>
-          </div>
-        </div>
-      </body>
-      </html>
+    const body = `
+      ${badge("Pending Review", "#f59e0b")}
+      <br><br>
+      ${sectionHeading("New KYC Submission")}
+      ${paragraph("A user has submitted their KYC verification documents and is awaiting approval.")}
+      ${detailTable(
+        detailRow("User", userName) +
+        detailRow("Email", userEmail) +
+        detailRow("User ID", userId) +
+        detailRow("KYC ID", kycId) +
+        detailRow("Document Type", docTypeLabels[documentType] || documentType) +
+        detailRow("Nationality", nationality) +
+        detailRow("Submitted", new Date().toLocaleString())
+      )}
+      ${warningBox(`
+        <p style="margin:0 0 8px; font-size:14px; font-weight:600; color:#92400e;">Action Required:</p>
+        <ul style="margin:0; padding-left:18px; font-size:14px; color:#92400e;">
+          <li style="margin-bottom:4px;">Review uploaded documents (ID, proof of address, selfie)</li>
+          <li style="margin-bottom:4px;">Verify information matches the documents</li>
+          <li style="margin-bottom:4px;">Approve or reject the KYC submission</li>
+          <li>Provide clear feedback if rejecting</li>
+        </ul>
+      `)}
+      ${ctaButton("Review KYC Submission", `${emailConfig.appUrl}/admin/kyc`, "#f59e0b")}
+      ${paragraph("Please review this submission within 24–48 hours to maintain service quality.")}
+      <p style="margin:20px 0 0; font-size:13px; color:#9ca3af;">${emailConfig.appName} Admin Panel</p>
     `;
 
     await transporter.sendMail({
       from: emailConfig.from,
       to: adminEmail,
-      subject: `🆔 New KYC Verification: ${userName} (${userEmail})`,
-      html,
-      text: `New KYC verification submitted\n\nUser: ${userName}\nEmail: ${userEmail}\nUser ID: ${userId}\nKYC ID: ${kycId}\nDocument Type: ${docTypeLabels[documentType] || documentType}\nNationality: ${nationality}\nSubmitted: ${new Date().toLocaleString()}\n\nAction required: Review and verify the submitted documents.\n\nReview at: ${emailConfig.appUrl}/admin/kyc`,
+      subject: `New KYC Verification: ${userName} (${userEmail})`,
+      html: emailWrapper({ preheader: `${userName} submitted KYC documents for review.`, body }),
+      text: `New KYC verification submitted\n\nUser: ${userName}\nEmail: ${userEmail}\nUser ID: ${userId}\nKYC ID: ${kycId}\nDocument Type: ${docTypeLabels[documentType] || documentType}\nNationality: ${nationality}\nSubmitted: ${new Date().toLocaleString()}\n\nReview at: ${emailConfig.appUrl}/admin/kyc`,
     });
 
     console.log(`✅ Admin KYC submission notification sent to ${adminEmail} for ${userEmail}`);
