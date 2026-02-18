@@ -4,7 +4,7 @@ const BRAND_PRIMARY = "#4a6cf7";
 const BRAND_DARK = "#3b5de7";
 const BRAND_LIGHT = "#eef0ff";
 
-const logoUrl = `${emailConfig.appUrl}/images/logo/A-Logo.png`;
+const logoUrl = `${emailConfig.appUrl}/images/logo/A-LogoB.png`;
 const year = new Date().getFullYear();
 
 /**
