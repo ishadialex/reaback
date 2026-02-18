@@ -38,6 +38,7 @@ export const resetPasswordSchema = z.object({
   newPassword: z.string().min(8, "Password must be at least 8 characters"),
 });
 
+// Refresh/logout now rely on httpOnly cookies; accept missing body for backwards compatibility
 export const refreshTokenSchema = z.object({
-  refreshToken: z.string().min(1),
+  refreshToken: z.string().min(1).optional(),
 });
