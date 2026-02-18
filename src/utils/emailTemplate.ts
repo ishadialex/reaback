@@ -1,10 +1,13 @@
 import { emailConfig } from "../config/email.js";
+import { env } from "../config/env.js";
 
 const BRAND_PRIMARY = "#4a6cf7";
 const BRAND_DARK = "#3b5de7";
 const BRAND_LIGHT = "#eef0ff";
 
-const logoUrl = `${emailConfig.appUrl}/images/logo/A-LogoB.png`;
+// Logo must be served from the frontend (Vercel), not the backend (Render).
+// emailConfig.appUrl points to the API server which does not serve static files.
+const logoUrl = `${env.FRONTEND_URL}/images/logo/A-LogoB.png`;
 const year = new Date().getFullYear();
 
 /**
