@@ -15,29 +15,13 @@ import { getLocationString } from "../services/geolocation.service.js";
 import { env } from "../config/env.js";
 import { setAuthCookies, clearAuthCookies, getRefreshTokenFromCookies } from "../utils/cookies.js";
 import { verify2FACode } from "./twoFactor.controller.js";
+import { parseUserAgent } from "../utils/userAgent.js";
+
+// Grace period for token rotation — allows concurrent/delayed requests from mobile browsers
+const TOKEN_ROTATION_GRACE_MS = 60 * 1000; // 60 seconds
 
 function generateReferralCode(): string {
   return crypto.randomBytes(4).toString("hex"); // 8 hex chars
-}
-
-function parseUserAgent(ua: string | undefined): { device: string; browser: string } {
-  if (!ua) return { device: "Unknown", browser: "Unknown" };
-
-  let browser = "Unknown";
-  // iOS browsers use different identifiers than their desktop counterparts:
-  // CriOS = Chrome on iOS, FxiOS = Firefox on iOS, EdgiOS = Edge on iOS, OPiOS = Opera on iOS
-  if (ua.includes("FxiOS") || ua.includes("Firefox")) browser = "Firefox";
-  else if (ua.includes("EdgiOS") || ua.includes("Edg")) browser = "Edge";
-  else if (ua.includes("OPiOS") || ua.includes("OPR")) browser = "Opera";
-  else if (ua.includes("Brave")) browser = "Brave";
-  else if (ua.includes("CriOS") || ua.includes("Chrome")) browser = "Chrome";
-  else if (ua.includes("Safari")) browser = "Safari";
-
-  let device = "Desktop";
-  if (ua.includes("iPad") || ua.includes("Tablet")) device = "Tablet";
-  else if (ua.includes("Mobile")) device = "Mobile";
-
-  return { device, browser };
 }
 
 export async function register(req: Request, res: Response) {
@@ -1150,7 +1134,6 @@ export async function refreshToken(req: Request, res: Response) {
     }
 
     // Look up session by current token OR by previousToken (grace period)
-    const GRACE_PERIOD_MS = 60 * 1000; // 60 seconds — allows for mobile browser delays
 
     let session = await prisma.session.findUnique({
       where: { token },
@@ -1164,7 +1147,7 @@ export async function refreshToken(req: Request, res: Response) {
 
       if (session && session.isActive && session.tokenRotatedAt) {
         const elapsed = Date.now() - session.tokenRotatedAt.getTime();
-        if (elapsed > GRACE_PERIOD_MS) {
+        if (elapsed > TOKEN_ROTATION_GRACE_MS) {
           // Grace period expired — possible token reuse attack: invalidate session
           await prisma.session.update({
             where: { id: session.id },
@@ -1267,7 +1250,6 @@ export async function validateSession(req: Request, res: Response) {
 
     // If not found, check grace period for recently rotated tokens
     if (!session) {
-      const GRACE_PERIOD_MS = 60 * 1000; // 60 seconds — allows for mobile browser delays
       const graceSession = await prisma.session.findFirst({
         where: { previousToken: token },
         select: { isActive: true, tokenRotatedAt: true },
@@ -1275,7 +1257,7 @@ export async function validateSession(req: Request, res: Response) {
 
       if (graceSession && graceSession.isActive && graceSession.tokenRotatedAt) {
         const elapsed = Date.now() - graceSession.tokenRotatedAt.getTime();
-        if (elapsed <= GRACE_PERIOD_MS) {
+        if (elapsed <= TOKEN_ROTATION_GRACE_MS) {
           return success(res, { valid: true, checkInterval: 5000 });
         }
       }

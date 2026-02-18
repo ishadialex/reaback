@@ -7,6 +7,7 @@ import { signAccessToken, signRefreshToken } from "../utils/jwt.js";
 import { env } from "../config/env.js";
 import { sendLoginAlert, notifyAdminNewUserSignup, notifyAdminUserSignin, sendReferralSuccessNotification, sendWelcomeBonusNotification } from "../services/notification.service.js";
 import { getLocationString } from "../services/geolocation.service.js";
+import { parseUserAgent } from "../utils/userAgent.js";
 // Cookie utilities imported if needed in future
 // Auth cookies are set via exchange-oauth-token endpoint in auth.controller.ts
 
@@ -18,26 +19,6 @@ const googleClient = new OAuth2Client(
 
 function generateReferralCode(): string {
   return crypto.randomBytes(4).toString("hex"); // 8 hex chars
-}
-
-function parseUserAgent(ua: string | undefined): { device: string; browser: string } {
-  if (!ua) return { device: "Unknown", browser: "Unknown" };
-
-  let browser = "Unknown";
-  // iOS browsers use different identifiers than their desktop counterparts:
-  // CriOS = Chrome on iOS, FxiOS = Firefox on iOS, EdgiOS = Edge on iOS, OPiOS = Opera on iOS
-  if (ua.includes("FxiOS") || ua.includes("Firefox")) browser = "Firefox";
-  else if (ua.includes("EdgiOS") || ua.includes("Edg")) browser = "Edge";
-  else if (ua.includes("OPiOS") || ua.includes("OPR")) browser = "Opera";
-  else if (ua.includes("Brave")) browser = "Brave";
-  else if (ua.includes("CriOS") || ua.includes("Chrome")) browser = "Chrome";
-  else if (ua.includes("Safari")) browser = "Safari";
-
-  let device = "Desktop";
-  if (ua.includes("iPad") || ua.includes("Tablet")) device = "Tablet";
-  else if (ua.includes("Mobile")) device = "Mobile";
-
-  return { device, browser };
 }
 
 /**
