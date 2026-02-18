@@ -315,7 +315,8 @@ export async function login(req: Request, res: Response) {
 
     return success(res, {
       user,
-      // Tokens are now in httpOnly cookies, not in response
+      accessToken,
+      refreshToken,
     });
   } catch (err) {
     console.error("login error:", err);
@@ -470,7 +471,8 @@ export async function forceLogin(req: Request, res: Response) {
 
     return success(res, {
       user,
-      // Tokens are now in httpOnly cookies, not in response
+      accessToken,
+      refreshToken,
       message: `Successfully logged in. ${invalidatedSessions.count} other session(s) have been logged out.`,
     });
   } catch (err) {
@@ -722,7 +724,7 @@ export async function verify2FALogin(req: Request, res: Response) {
 
     setAuthCookies(res, accessToken, refreshToken);
 
-    return success(res, { user });
+    return success(res, { user, accessToken, refreshToken });
   } catch (err) {
     console.error("verify2FALogin error:", err);
     return error(res, "2FA login failed", 500);
@@ -916,7 +918,8 @@ export async function verifyOtp(req: Request, res: Response) {
         profilePhoto: user.profilePhoto,
         emailVerified: true,
       },
-      // Tokens are now in httpOnly cookies, not in response
+      accessToken,
+      refreshToken,
     }, "Email verified successfully");
   } catch (err) {
     console.error("verifyOtp error:", err);
@@ -1240,6 +1243,8 @@ export async function refreshToken(req: Request, res: Response) {
 
     return success(res, {
       message: "Tokens refreshed successfully",
+      accessToken: newAccessToken,
+      refreshToken: newRefreshToken,
     });
   } catch (err) {
     console.error("refreshToken error:", err);
@@ -1386,6 +1391,8 @@ export async function exchangeOAuthToken(req: Request, res: Response) {
     // Return user data
     return success(res, {
       user: oAuthToken.user,
+      accessToken: oAuthToken.accessToken,
+      refreshToken: oAuthToken.refreshToken,
     }, "Authentication successful");
   } catch (err) {
     console.error("exchangeOAuthToken error:", err);
