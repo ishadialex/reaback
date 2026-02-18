@@ -24,14 +24,18 @@ function parseUserAgent(ua: string | undefined): { device: string; browser: stri
   if (!ua) return { device: "Unknown", browser: "Unknown" };
 
   let browser = "Unknown";
-  if (ua.includes("Firefox")) browser = "Firefox";
-  else if (ua.includes("Edg")) browser = "Edge";
-  else if (ua.includes("Chrome")) browser = "Chrome";
+  // iOS browsers use different identifiers than their desktop counterparts:
+  // CriOS = Chrome on iOS, FxiOS = Firefox on iOS, EdgiOS = Edge on iOS, OPiOS = Opera on iOS
+  if (ua.includes("FxiOS") || ua.includes("Firefox")) browser = "Firefox";
+  else if (ua.includes("EdgiOS") || ua.includes("Edg")) browser = "Edge";
+  else if (ua.includes("OPiOS") || ua.includes("OPR")) browser = "Opera";
+  else if (ua.includes("Brave")) browser = "Brave";
+  else if (ua.includes("CriOS") || ua.includes("Chrome")) browser = "Chrome";
   else if (ua.includes("Safari")) browser = "Safari";
 
   let device = "Desktop";
-  if (ua.includes("Mobile")) device = "Mobile";
-  else if (ua.includes("Tablet")) device = "Tablet";
+  if (ua.includes("iPad") || ua.includes("Tablet")) device = "Tablet";
+  else if (ua.includes("Mobile")) device = "Mobile";
 
   return { device, browser };
 }
