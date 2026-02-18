@@ -280,7 +280,9 @@ export async function login(req: Request, res: Response) {
 
     // Send login alert for all successful logins
     setImmediate(() => {
-      sendLoginAlert(user.id, user.email, device, browser, location, ipAddress).catch(() => {});
+      sendLoginAlert(user.id, user.email, device, browser, location, ipAddress).catch((err) => {
+        console.error('❌ Login alert email failed:', err?.message || err);
+      });
     });
 
     // Notify admin about user signin
@@ -436,7 +438,9 @@ export async function forceLogin(req: Request, res: Response) {
 
     // Send login alert (async, non-blocking)
     setImmediate(() => {
-      sendLoginAlert(user.id, user.email, device, browser, location, ipAddress).catch(() => {});
+      sendLoginAlert(user.id, user.email, device, browser, location, ipAddress).catch((err) => {
+        console.error('❌ Login alert email failed:', err?.message || err);
+      });
     });
 
     // Notify admin about user signin
@@ -544,7 +548,9 @@ export async function verify2FALogin(req: Request, res: Response) {
             session.browser,
             session.location,
             session.ipAddress
-          ).catch(() => {});
+          ).catch((err) => {
+            console.error('❌ Login alert email failed:', err?.message || err);
+          });
         });
 
         setImmediate(() => {
@@ -695,7 +701,9 @@ export async function verify2FALogin(req: Request, res: Response) {
     });
 
     setImmediate(() => {
-      sendLoginAlert(user.id, user.email, device, browser, location, ipAddress).catch(() => {});
+      sendLoginAlert(user.id, user.email, device, browser, location, ipAddress).catch((err) => {
+        console.error('❌ Login alert email failed:', err?.message || err);
+      });
     });
 
     setImmediate(() => {
