@@ -325,6 +325,65 @@ export async function googleCallback(req: Request, res: Response) {
       }
     }
 
+    // Parse user agent and get location for session tracking
+    const { device, browser, deviceModel, os, osVersion } = parseUserAgent(req.headers["user-agent"]);
+    const ipAddress = req.ip || "";
+    const location = await getLocationString(ipAddress);
+
+    // Check for existing active sessions (Single-Device Login Security)
+    const existingSessions = await prisma.session.findMany({
+      where: {
+        userId: user.id,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        device: true,
+        browser: true,
+        deviceModel: true,
+        os: true,
+        osVersion: true,
+        location: true,
+        lastActive: true,
+        createdAt: true,
+      },
+      orderBy: { lastActive: "desc" },
+    });
+
+    let sessionConflict = false;
+    let existingSessionInfo = null;
+
+    // If active session exists, check if it's from the same device
+    if (existingSessions.length > 0) {
+      const sameDeviceSession = existingSessions.find(
+        (s) =>
+          s.device === device &&
+          s.browser === browser &&
+          s.deviceModel === deviceModel &&
+          s.os === os
+      );
+
+      if (sameDeviceSession) {
+        // Same device re-login — silently invalidate old session and continue
+        await prisma.session.updateMany({
+          where: { userId: user.id, isActive: true },
+          data: { isActive: false },
+        });
+        console.log(`🔄 Same-device OAuth re-login for ${email}, refreshing session`);
+      } else {
+        // Genuinely different device — flag conflict
+        console.log(`⚠️ OAuth login attempt: Active session from different device for ${email}`);
+        sessionConflict = true;
+        const mostRecentSession = existingSessions[0];
+        existingSessionInfo = {
+          device: mostRecentSession.device,
+          browser: mostRecentSession.browser,
+          location: mostRecentSession.location,
+          lastActive: mostRecentSession.lastActive,
+        };
+      }
+    }
+
     // Generate JWT tokens with profile data
     const name = user.firstName && user.lastName
       ? `${user.firstName} ${user.lastName}`
@@ -343,23 +402,24 @@ export async function googleCallback(req: Request, res: Response) {
       picture: user.profilePhoto || undefined
     });
 
-    // Parse user agent and get location for session tracking
-    const { device, browser } = parseUserAgent(req.headers["user-agent"]);
-    const ipAddress = req.ip || "";
-    const location = await getLocationString(ipAddress);
-
-    // Create session
-    await prisma.session.create({
-      data: {
-        userId: user.id,
-        token: refreshToken,
-        device,
-        browser,
-        ipAddress,
-        location,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
-      },
-    });
+    // If session conflict, don't create session yet - let frontend handle it
+    if (!sessionConflict) {
+      // Create session (no conflict or same device)
+      await prisma.session.create({
+        data: {
+          userId: user.id,
+          token: refreshToken,
+          device,
+          browser,
+          deviceModel,
+          os,
+          osVersion,
+          ipAddress,
+          location,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+        },
+      });
+    }
 
     // Send login alert notification (skip if 2FA is required - will send after 2FA verification)
     if (!user.requireTwoFactorLogin || !user.twoFactorEnabled) {
@@ -388,7 +448,7 @@ export async function googleCallback(req: Request, res: Response) {
     const tempToken = crypto.randomBytes(32).toString("hex");
     const tempTokenExpiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
-    // Store temporary token in database
+    // Store temporary token in database with session conflict info
     await prisma.oAuthToken.create({
       data: {
         token: tempToken,
@@ -396,11 +456,22 @@ export async function googleCallback(req: Request, res: Response) {
         accessToken,
         refreshToken,
         expiresAt: tempTokenExpiry,
+        metadata: sessionConflict
+          ? JSON.stringify({
+              sessionConflict: true,
+              existingSession: existingSessionInfo,
+              newDevice: { device, browser, location },
+            })
+          : null,
       },
     });
 
     // Redirect to frontend with temporary token (will be exchanged for cookies)
-    const redirectUrl = `${env.FRONTEND_URL}/auth/callback?token=${tempToken}`;
+    // Include requiresForceLogin flag if session conflict detected
+    let redirectUrl = `${env.FRONTEND_URL}/auth/callback?token=${tempToken}`;
+    if (sessionConflict) {
+      redirectUrl += `&requiresForceLogin=true`;
+    }
     return res.redirect(redirectUrl);
   } catch (err) {
     console.error("Google OAuth callback error:", err);

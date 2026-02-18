@@ -197,6 +197,9 @@ export async function login(req: Request, res: Response) {
         id: true,
         device: true,
         browser: true,
+        deviceModel: true,
+        os: true,
+        osVersion: true,
         location: true,
         lastActive: true,
         createdAt: true,
@@ -204,7 +207,7 @@ export async function login(req: Request, res: Response) {
       orderBy: { lastActive: "desc" },
     });
 
-    const { device, browser } = parseUserAgent(req.headers["user-agent"]);
+    const { device, browser, deviceModel, os, osVersion } = parseUserAgent(req.headers["user-agent"]);
     const ipAddress = req.ip || "";
     const location = await getLocationString(ipAddress);
 
@@ -213,7 +216,11 @@ export async function login(req: Request, res: Response) {
     // If active session exists, check if it's from the same device
     if (existingSessions.length > 0) {
       const sameDeviceSession = existingSessions.find(
-        (s) => s.device === device && s.browser === browser
+        (s) =>
+          s.device === device &&
+          s.browser === browser &&
+          s.deviceModel === deviceModel &&
+          s.os === os
       );
 
       if (sameDeviceSession) {
@@ -272,6 +279,9 @@ export async function login(req: Request, res: Response) {
         token: refreshToken,
         device,
         browser,
+        deviceModel,
+        os,
+        osVersion,
         ipAddress,
         location,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
@@ -402,7 +412,7 @@ export async function forceLogin(req: Request, res: Response) {
     console.log(`🚪 Force login: Invalidated ${invalidatedSessions.count} existing session(s) for ${normalizedEmail}`);
 
     // Get device info for new session
-    const { device, browser } = parseUserAgent(req.headers["user-agent"]);
+    const { device, browser, deviceModel, os, osVersion } = parseUserAgent(req.headers["user-agent"]);
     const ipAddress = req.ip || "";
     const location = await getLocationString(ipAddress);
 
@@ -430,6 +440,9 @@ export async function forceLogin(req: Request, res: Response) {
         token: refreshToken,
         device,
         browser,
+        deviceModel,
+        os,
+        osVersion,
         ipAddress,
         location,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
@@ -628,17 +641,31 @@ export async function verify2FALogin(req: Request, res: Response) {
       });
     } else {
       // Check for existing active sessions (Single-Device Login Security)
-      const { device, browser } = parseUserAgent(req.headers["user-agent"]);
+      const { device, browser, deviceModel, os, osVersion } = parseUserAgent(req.headers["user-agent"]);
       const existingSessions = await prisma.session.findMany({
         where: { userId: user.id, isActive: true },
-        select: { id: true, device: true, browser: true, location: true, lastActive: true },
+        select: {
+        id: true,
+        device: true,
+        browser: true,
+        deviceModel: true,
+        os: true,
+        osVersion: true,
+        location: true,
+        lastActive: true,
+        createdAt: true
+      },
         orderBy: { lastActive: "desc" },
       });
 
       if (existingSessions.length > 0) {
         const sameDeviceSession = existingSessions.find(
-          (s) => s.device === device && s.browser === browser
-        );
+        (s) =>
+          s.device === device &&
+          s.browser === browser &&
+          s.deviceModel === deviceModel &&
+          s.os === os
+      );
 
         if (sameDeviceSession) {
           await prisma.session.updateMany({
@@ -667,7 +694,7 @@ export async function verify2FALogin(req: Request, res: Response) {
     }
 
     // Generate tokens
-    const { device, browser } = parseUserAgent(req.headers["user-agent"]);
+    const { device, browser, deviceModel, os, osVersion } = parseUserAgent(req.headers["user-agent"]);
     const ipAddress = req.ip || "";
     const location = await getLocationString(ipAddress);
 
@@ -694,6 +721,9 @@ export async function verify2FALogin(req: Request, res: Response) {
         token: refreshToken,
         device,
         browser,
+        deviceModel,
+        os,
+        osVersion,
         ipAddress,
         location,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
@@ -883,7 +913,9 @@ export async function verifyOtp(req: Request, res: Response) {
     }
 
     // Parse user agent for session tracking
-    const { device, browser } = parseUserAgent(req.headers["user-agent"]);
+    const { device, browser, deviceModel, os, osVersion } = parseUserAgent(req.headers["user-agent"]);
+    const ipAddress = req.ip || "";
+    const location = await getLocationString(ipAddress);
 
     // Generate tokens
     const accessToken = signAccessToken({ userId: user.id, email: user.email });
@@ -896,7 +928,11 @@ export async function verifyOtp(req: Request, res: Response) {
         token: refreshToken,
         device,
         browser,
-        ipAddress: req.ip || "",
+        deviceModel,
+        os,
+        osVersion,
+        ipAddress,
+        location,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
       },
     });
@@ -1330,7 +1366,7 @@ export async function logout(req: Request, res: Response) {
 
 export async function exchangeOAuthToken(req: Request, res: Response) {
   try {
-    const { token } = req.body;
+    const { token, forceLogin } = req.body;
 
     if (!token) {
       return error(res, "Token is required", 400);
@@ -1377,6 +1413,85 @@ export async function exchangeOAuthToken(req: Request, res: Response) {
         message: "Two-factor authentication code required",
         email: oAuthToken.user.email,
         oauthToken: token, // Pass token back so frontend can use it for 2FA verification
+      });
+    }
+
+    // Check for session conflict (stored in metadata during OAuth callback)
+    if (oAuthToken.metadata && !forceLogin) {
+      try {
+        const metadata = JSON.parse(oAuthToken.metadata);
+        if (metadata.sessionConflict) {
+          console.log(`⚠️ OAuth session conflict detected for ${oAuthToken.user.email}`);
+          return res.status(409).json({
+            success: false,
+            requiresForceLogin: true,
+            message: "You are already logged in on another device",
+            existingSession: metadata.existingSession,
+            newDevice: metadata.newDevice,
+          });
+        }
+      } catch (e) {
+        console.error("Failed to parse OAuth token metadata:", e);
+      }
+    }
+
+    // If force login, invalidate all existing sessions
+    if (forceLogin) {
+      const invalidatedSessions = await prisma.session.updateMany({
+        where: {
+          userId: oAuthToken.user.id,
+          isActive: true,
+        },
+        data: {
+          isActive: false,
+        },
+      });
+      console.log(`🚪 OAuth force login: Invalidated ${invalidatedSessions.count} existing session(s) for ${oAuthToken.user.email}`);
+    }
+
+    // Check if session was already created (no conflict) or needs to be created (force login)
+    const existingSession = await prisma.session.findUnique({
+      where: { token: oAuthToken.refreshToken },
+    });
+
+    if (!existingSession) {
+      // Create session (this happens when force login is used)
+      const { device, browser, deviceModel, os, osVersion } = parseUserAgent(req.headers["user-agent"]);
+      const ipAddress = req.ip || "";
+      const location = await getLocationString(ipAddress);
+
+      await prisma.session.create({
+      data: {
+        userId: oAuthToken.user.id,
+        token: oAuthToken.refreshToken,
+        device,
+        browser,
+        deviceModel,
+        os,
+        osVersion,
+        ipAddress,
+        location,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        },
+      });
+
+      // Send login alert for force login
+      setImmediate(() => {
+        sendLoginAlert(oAuthToken.user.id, oAuthToken.user.email, device, browser, location, ipAddress).catch((err) => {
+          console.error('❌ Login alert email failed:', err?.message || err);
+        });
+      });
+
+      setImmediate(() => {
+        notifyAdminUserSignin(
+          `${oAuthToken.user.firstName} ${oAuthToken.user.lastName}`,
+          oAuthToken.user.email,
+          oAuthToken.user.id,
+          device,
+          browser,
+          location,
+          ipAddress
+        ).catch((err) => console.error("Error sending admin signin notification:", err));
       });
     }
 

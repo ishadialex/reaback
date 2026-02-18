@@ -144,6 +144,9 @@ model Session {
   tokenRotatedAt DateTime?
   device         String    @default("Unknown")
   browser        String    @default("Unknown")
+  deviceModel    String?   // Detailed device model (e.g., "iPhone 15 Pro", "Samsung Galaxy S24")
+  os             String?   // Operating system name (e.g., "iOS", "Android", "Windows")
+  osVersion      String?   // OS version (e.g., "17.2", "14.0", "11")
   ipAddress      String    @default("")
   location       String    @default("Unknown")
   lastActive     DateTime  @default(now())
@@ -182,6 +185,7 @@ model OAuthToken {
   accessToken  String
   refreshToken String
   expiresAt    DateTime
+  metadata     String?  // JSON string for session conflict info
   createdAt    DateTime @default(now())
 }
 
