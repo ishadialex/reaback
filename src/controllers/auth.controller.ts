@@ -562,6 +562,8 @@ export async function verify2FALogin(req: Request, res: Response) {
 
       return success(res, {
         user: oAuthTokenRecord.user,
+        accessToken: oAuthTokenRecord.accessToken,
+        refreshToken: oAuthTokenRecord.refreshToken,
       }, "Authentication successful");
     }
 
@@ -1122,8 +1124,8 @@ export async function resetPassword(req: Request, res: Response) {
 
 export async function refreshToken(req: Request, res: Response) {
   try {
-    // Read refresh token from httpOnly cookie instead of body
-    const token = getRefreshTokenFromCookies(req);
+    // Read refresh token from httpOnly cookie first, fall back to request body
+    const token = getRefreshTokenFromCookies(req) || req.body?.refreshToken;
 
     if (!token) {
       return error(res, "Refresh token is required. Please login again.", 400);
@@ -1182,6 +1184,8 @@ export async function refreshToken(req: Request, res: Response) {
 
         return success(res, {
           message: "Tokens refreshed successfully",
+          accessToken: graceAccessToken,
+          refreshToken: session.token,
         });
       }
     }
@@ -1241,7 +1245,7 @@ export async function refreshToken(req: Request, res: Response) {
 
 export async function validateSession(req: Request, res: Response) {
   try {
-    const token = getRefreshTokenFromCookies(req);
+    const token = getRefreshTokenFromCookies(req) || req.body?.refreshToken;
 
     if (!token) {
       return error(res, "No token provided", 401);
@@ -1284,8 +1288,8 @@ export async function validateSession(req: Request, res: Response) {
 
 export async function logout(req: Request, res: Response) {
   try {
-    // Read refresh token from httpOnly cookie
-    const token = getRefreshTokenFromCookies(req);
+    // Read refresh token from httpOnly cookie, fall back to request body
+    const token = getRefreshTokenFromCookies(req) || req.body?.refreshToken;
 
     if (token) {
       // Try to find and deactivate the session
