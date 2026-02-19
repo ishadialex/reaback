@@ -130,10 +130,10 @@ export function ctaButton(text: string, href: string, color: string = BRAND_PRIM
 /**
  * Generate a highlighted info/alert box
  */
-export function infoBox(content: string, borderColor: string = BRAND_PRIMARY, bgColor: string = BRAND_LIGHT): string {
+export function infoBox(content: string, _borderColor: string = BRAND_PRIMARY, bgColor: string = BRAND_LIGHT): string {
   return `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 20px 0;">
   <tr>
-    <td style="background:${bgColor}; border-left:4px solid ${borderColor}; border-radius:6px; padding:16px 20px;">
+    <td style="background:${bgColor}; border-radius:6px; padding:16px 20px;">
       ${content}
     </td>
   </tr>

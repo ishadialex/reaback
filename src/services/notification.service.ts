@@ -177,9 +177,13 @@ export async function sendLoginAlert(
         detailRow("IP Address", ipAddress) +
         detailRow("Time", new Date().toLocaleString())
       )}
-      ${warningBox(`
-        <p style="margin:0; font-size:14px; color:#92400e;"><strong>Wasn't you?</strong> Secure your account immediately — change your password and review your active sessions.</p>
-      `)}
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 20px 0;">
+        <tr>
+          <td style="background:#fffbeb; border-radius:6px; padding:16px 20px;">
+            <p style="margin:0; font-size:14px; color:#92400e;"><strong>Wasn't you?</strong> Secure your account immediately — change your password and review your active sessions.</p>
+          </td>
+        </tr>
+      </table>
       ${ctaButton("Review Active Sessions", `${emailConfig.appUrl}/dashboard/settings?tab=sessions`)}
       <p style="margin:20px 0 0; font-size:14px; color:#9ca3af;">Regards,<br><strong style="color:#374151;">${emailConfig.appName} Security Team</strong></p>
     `;
