@@ -1057,9 +1057,9 @@ export async function forgotPassword(req: Request, res: Response) {
     try {
       await sendPasswordResetEmail(normalizedEmail, user.firstName, resetUrl);
       console.log(`✅ Password reset email sent to ${normalizedEmail}`);
-    } catch (emailError) {
-      console.error("Failed to send password reset email:", emailError);
-      // Don't fail the request if email fails
+    } catch (emailError: any) {
+      console.error(`❌ Password reset email FAILED for ${normalizedEmail}:`, emailError?.message || emailError);
+      // Still return success to prevent email enumeration, but log the failure
     }
 
     return success(res, null, "If that email exists, a reset link has been sent");

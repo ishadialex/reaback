@@ -130,12 +130,37 @@ export async function sendPasswordResetEmail(
     <p style="margin:20px 0 0; font-size:14px; color:#9ca3af;">Regards,<br><strong style="color:#374151;">${emailConfig.appName} Security Team</strong></p>
   `;
 
-  await transporter.sendMail({
+  const textContent = `
+Hello ${firstName},
+
+We received a request to reset the password for your ${emailConfig.appName} account.
+
+Reset your password using this link:
+${resetUrl}
+
+This link expires in 1 hour.
+
+If you did not request a password reset, you can safely ignore this email.
+
+---
+${emailConfig.appName} Security Team
+This is an automated message. Do not reply.
+  `.trim();
+
+  const sendPromise = transporter.sendMail({
     from: emailConfig.from,
     to: email,
     subject: `Reset your ${emailConfig.appName} password`,
+    text: textContent,
     html: emailWrapper({ preheader: "Reset your Alvarado account password — link expires in 1 hour.", body }),
   });
+
+  // 15-second timeout to prevent hanging
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("Password reset email send timeout after 15s")), 15000)
+  );
+
+  await Promise.race([sendPromise, timeoutPromise]);
 
   console.log(`✅ Password reset email sent to ${email}`);
 }
