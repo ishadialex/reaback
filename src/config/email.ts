@@ -1,18 +1,21 @@
 import { createTransport } from "nodemailer";
 
 // Create reusable transporter
+// Using Gmail SMTP: smtp.gmail.com:587 (STARTTLS)
+// SMTP_HOST=smtp.gmail.com, SMTP_PORT=587, SMTP_SECURE=false
+// SMTP_USER=your-gmail@gmail.com, SMTP_PASS=your-16-char-app-password
 export const transporter = createTransport({
   host: process.env.SMTP_HOST || "smtp.gmail.com",
   port: parseInt(process.env.SMTP_PORT || "587"),
-  secure: process.env.SMTP_SECURE === "true", // true for 465, false for other ports
+  secure: process.env.SMTP_SECURE === "true", // false for port 587 (STARTTLS)
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
-  // Add timeout to prevent hanging
-  connectionTimeout: 5000, // 5 seconds
-  greetingTimeout: 5000,
-  socketTimeout: 5000,
+  // Generous timeouts — Gmail connects reliably from any server
+  connectionTimeout: 10000, // 10 seconds
+  greetingTimeout: 10000,
+  socketTimeout: 30000, // 30 seconds for large emails
 });
 
 // Verify connection configuration (async, non-blocking)

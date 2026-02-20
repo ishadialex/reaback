@@ -4,10 +4,11 @@ import { env } from "../config/env.js";
 const BRAND_PRIMARY = "#4a6cf7";
 const BRAND_DARK = "#3b5de7";
 const BRAND_LIGHT = "#eef0ff";
+const HEADER_BG = "#171c28";
 
 // Logo must be served from the frontend (Vercel), not the backend (Render).
 // emailConfig.appUrl points to the API server which does not serve static files.
-const logoUrl = `${env.FRONTEND_URL}/images/logo/A-LogoB.png`;
+const logoUrl = `${env.FRONTEND_URL}/images/logo/A-Logo.png`;
 const year = new Date().getFullYear();
 
 /**
@@ -62,8 +63,8 @@ export function emailWrapper(options: {
 
           <!-- Logo header -->
           <tr>
-            <td style="background-color:#ffffff; padding: 32px 40px 20px; text-align:center; border-bottom: 1px solid #eef0f4;" class="padding-mobile">
-              <img src="${logoUrl}" alt="${emailConfig.appName}" width="160" style="display:block; margin:0 auto; max-width:160px; height:auto;">
+            <td style="background-color:#171c28; padding: 28px 40px; text-align:center; border-radius:12px 12px 0 0;" class="padding-mobile">
+              <img src="${logoUrl}" alt="${emailConfig.appName}" width="150" style="display:block; margin:0 auto; max-width:150px; height:auto;">
             </td>
           </tr>
 
@@ -111,7 +112,7 @@ export function emailWrapper(options: {
 /**
  * Generate a primary CTA button (table-based for email clients)
  */
-export function ctaButton(text: string, href: string, color: string = BRAND_PRIMARY): string {
+export function ctaButton(text: string, href: string, color: string = HEADER_BG): string {
   return `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 28px 0;">
   <tr>
     <td align="center">
