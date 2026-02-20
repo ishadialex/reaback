@@ -4,21 +4,9 @@ import { success, error } from "../../utils/response.js";
 
 /**
  * Validate investmentType and category combination
- * Rule: Pooled can only be Airbnb, Individual can only be Mortgage
+ * All categories are allowed for both individual and pooled investment types
  */
-function validateInvestmentTypeCategory(investmentType?: string, category?: string): string | null {
-  if (!investmentType || !category) {
-    return null; // Skip validation if either is missing
-  }
-
-  if (investmentType === "pooled" && category !== "airbnb") {
-    return "Pooled investments can only be Airbnb category";
-  }
-
-  if (investmentType === "individual" && category !== "mortgage") {
-    return "Individual investments can only be Mortgage category";
-  }
-
+function validateInvestmentTypeCategory(_investmentType?: string, _category?: string): string | null {
   return null;
 }
 
@@ -40,22 +28,27 @@ function parsePropertyBody(body: any) {
   if (body.managerRole) data.managerRole = body.managerRole;
   if (body.managerPhone) data.managerPhone = body.managerPhone;
 
-  // Numbers (floats)
-  if (body.price) data.price = Number(body.price);
-  if (body.minInvestment) data.minInvestment = Number(body.minInvestment);
-  if (body.maxInvestment) data.maxInvestment = Number(body.maxInvestment);
-  if (body.targetAmount) data.targetAmount = Number(body.targetAmount);
-  if (body.currentFunded) data.currentFunded = Number(body.currentFunded);
-  if (body.expectedROI) data.expectedROI = Number(body.expectedROI);
-  if (body.monthlyReturn) data.monthlyReturn = Number(body.monthlyReturn);
+  // Helper: parse float, fallback to 0 if missing or NaN
+  const toFloat = (val: any): number => { const n = Number(val); return isNaN(n) ? 0 : n; };
+  // Helper: parse int, fallback to 0 if missing or NaN
+  const toInt = (val: any): number => { const n = parseInt(val, 10); return isNaN(n) ? 0 : n; };
+
+  // Numbers (floats) — always set so Prisma never gets undefined/NaN
+  data.price = toFloat(body.price);
+  data.minInvestment = toFloat(body.minInvestment);
+  data.maxInvestment = toFloat(body.maxInvestment);
+  data.targetAmount = toFloat(body.targetAmount);
+  if (body.currentFunded !== undefined) data.currentFunded = toFloat(body.currentFunded);
+  if (body.expectedROI !== undefined) data.expectedROI = toFloat(body.expectedROI);
+  if (body.monthlyReturn !== undefined) data.monthlyReturn = toFloat(body.monthlyReturn);
 
   // Numbers (ints)
-  if (body.duration) data.duration = parseInt(body.duration, 10);
-  if (body.bedrooms) data.bedrooms = parseInt(body.bedrooms, 10);
-  if (body.bathrooms) data.bathrooms = parseInt(body.bathrooms, 10);
-  if (body.parking) data.parking = parseInt(body.parking, 10);
-  if (body.sqft) data.sqft = parseInt(body.sqft, 10);
-  if (body.investorCount) data.investorCount = parseInt(body.investorCount, 10);
+  if (body.duration !== undefined) data.duration = toInt(body.duration);
+  if (body.bedrooms !== undefined) data.bedrooms = toInt(body.bedrooms);
+  if (body.bathrooms !== undefined) data.bathrooms = toInt(body.bathrooms);
+  if (body.parking !== undefined) data.parking = toInt(body.parking);
+  if (body.sqft !== undefined) data.sqft = toInt(body.sqft);
+  if (body.investorCount !== undefined) data.investorCount = toInt(body.investorCount);
 
   // Booleans
   if (body.isFeatured !== undefined) data.isFeatured = body.isFeatured === "true";
@@ -158,9 +151,6 @@ export async function create(req: Request, res: Response) {
 
     // Extract property images
     const propertyImages = files?.images || [];
-    if (propertyImages.length < 4) {
-      return error(res, "Minimum 4 property images required", 400);
-    }
     if (propertyImages.length > 20) {
       return error(res, "Maximum 20 property images allowed", 400);
     }
@@ -179,11 +169,9 @@ export async function create(req: Request, res: Response) {
       data.managerPhoto = managerPhoto;
     }
 
-    // Validate required fields
-    if (!data.title || !data.location || !data.price || !data.minInvestment ||
-        !data.maxInvestment || !data.targetAmount || !data.expectedROI ||
-        !data.monthlyReturn || !data.sqft || !data.description) {
-      return error(res, "Missing required fields: title, location, price, minInvestment, maxInvestment, targetAmount, expectedROI, monthlyReturn, sqft, description", 400);
+    // Only title and location are strictly required (all other fields have DB defaults)
+    if (!data.title || !data.location) {
+      return error(res, "Missing required fields: title, location", 400);
     }
 
     // Validate investmentType and category combination
