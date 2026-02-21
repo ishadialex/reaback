@@ -215,9 +215,6 @@ export async function update(req: Request, res: Response) {
 
     // If new property images uploaded, use them; otherwise keep existing
     if (files?.images && files.images.length > 0) {
-      if (files.images.length < 4) {
-        return error(res, "Minimum 4 property images required", 400);
-      }
       if (files.images.length > 20) {
         return error(res, "Maximum 20 property images allowed", 400);
       }
