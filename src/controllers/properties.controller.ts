@@ -92,8 +92,8 @@ export async function getFeatured(req: Request, res: Response) {
 // Maps DB property to frontend InvestmentProperty shape
 function mapProperty(p: any) {
   const activeInvestments = p.userInvestments || [];
-  const currentFunded = activeInvestments.reduce((sum: number, inv: any) => sum + inv.amount, 0);
-  const investorCount = activeInvestments.length;
+  const currentFunded = p.currentFunded ?? activeInvestments.reduce((sum: number, inv: any) => sum + inv.amount, 0);
+  const investorCount = p.investorCount ?? activeInvestments.length;
   const status = currentFunded >= p.targetAmount && p.targetAmount > 0
     ? "fully-funded"
     : (p.investmentStatus || "available");

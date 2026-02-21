@@ -98,9 +98,9 @@ export async function getAll(req: Request, res: Response) {
     });
 
     const mapped = properties.map((p) => {
-      const funded = p.userInvestments.reduce((sum, inv) => sum + inv.amount, 0);
+      const funded = p.currentFunded ?? p.userInvestments.reduce((sum, inv) => sum + inv.amount, 0);
       const { userInvestments, ...rest } = p;
-      return { ...rest, currentFunded: funded, investorCount: userInvestments.length };
+      return { ...rest, currentFunded: funded, investorCount: p.investorCount ?? userInvestments.length };
     });
 
     return success(res, mapped);
@@ -133,12 +133,12 @@ export async function getOne(req: Request, res: Response) {
     }
 
     const activeInvestments = property.userInvestments.filter((inv) => inv.status === "active");
-    const funded = activeInvestments.reduce((sum, inv) => sum + inv.amount, 0);
+    const funded = property.currentFunded ?? activeInvestments.reduce((sum, inv) => sum + inv.amount, 0);
 
     return success(res, {
       ...property,
       currentFunded: funded,
-      investorCount: activeInvestments.length,
+      investorCount: property.investorCount ?? activeInvestments.length,
     });
   } catch (err) {
     return error(res, "Failed to fetch property", 500);

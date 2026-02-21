@@ -152,16 +152,17 @@ export async function createPropertyInvestment(req: Request, res: Response) {
     // Compute current funding dynamically from active investments
     const currentFunded = property.userInvestments.reduce((sum, inv) => sum + inv.amount, 0);
 
-    if (property.investmentStatus !== "available" || (currentFunded >= property.targetAmount && property.targetAmount > 0)) {
-      return error(res, "Property is not available for investment", 400);
-    }
-
     // Check if user already has an active investment in this property
     const existingInvestment = await prisma.userInvestment.findFirst({
       where: { userId, propertyId, status: "active" },
     });
 
     const isTopUp = !!existingInvestment;
+
+    // Only block new investments when the property is unavailable or fully funded
+    if (!isTopUp && (property.investmentStatus !== "available" || (currentFunded >= property.targetAmount && property.targetAmount > 0))) {
+      return error(res, "Property is not available for investment", 400);
+    }
 
     // For new investments, enforce minInvestment; for top-ups, any positive amount is fine
     if (!isTopUp && numAmount < property.minInvestment) {
