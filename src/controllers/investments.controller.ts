@@ -13,7 +13,7 @@ export async function getUserInvestments(req: Request, res: Response) {
           select: { title: true, image: true, minInvestment: true },
         },
         property: {
-          select: { title: true, images: true },
+          select: { title: true, images: true, expectedROI: true },
         },
       },
       orderBy: { createdAt: "desc" },
@@ -38,6 +38,7 @@ export async function getUserInvestments(req: Request, res: Response) {
         status: inv.status,
         investmentType: isProperty ? "individual" : "option",
         expectedROI: inv.expectedROI,
+        propertyExpectedROI: isProperty ? (inv.property?.expectedROI ?? inv.expectedROI) : inv.expectedROI,
         expectedReturn,
         monthlyReturn,
         expectedTotal,

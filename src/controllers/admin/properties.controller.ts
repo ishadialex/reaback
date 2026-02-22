@@ -39,7 +39,7 @@ function parsePropertyBody(body: any) {
   data.maxInvestment = toFloat(body.maxInvestment);
   data.targetAmount = toFloat(body.targetAmount);
   if (body.currentFunded !== undefined) data.currentFunded = toFloat(body.currentFunded);
-  if (body.expectedROI !== undefined) data.expectedROI = toFloat(body.expectedROI);
+  // expectedROI is computed — not accepted from body
   if (body.monthlyReturn !== undefined) data.monthlyReturn = toFloat(body.monthlyReturn);
 
   // Numbers (ints)
@@ -169,6 +169,9 @@ export async function create(req: Request, res: Response) {
       data.managerPhoto = managerPhoto;
     }
 
+    // Auto-compute expectedROI = monthlyReturn * duration
+    data.expectedROI = (data.monthlyReturn ?? 0) * (data.duration ?? 12);
+
     // Only title and location are strictly required (all other fields have DB defaults)
     if (!data.title || !data.location) {
       return error(res, "Missing required fields: title, location", 400);
@@ -201,6 +204,13 @@ export async function update(req: Request, res: Response) {
     }
 
     const data = parsePropertyBody(req.body);
+
+    // Auto-compute expectedROI from monthlyReturn * duration (use existing values as fallback)
+    if (data.monthlyReturn !== undefined || data.duration !== undefined) {
+      const monthlyReturn = data.monthlyReturn ?? existing.monthlyReturn;
+      const duration = data.duration ?? existing.duration;
+      data.expectedROI = monthlyReturn * duration;
+    }
 
     // Validate investmentType and category combination if either is being updated
     const investmentType = data.investmentType || existing.investmentType;
