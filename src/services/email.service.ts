@@ -9,6 +9,7 @@ import {
   sectionHeading,
   paragraph,
   otpBox,
+  bigAmount,
   BRAND_PRIMARY,
 } from "../utils/emailTemplate.js";
 
@@ -305,5 +306,157 @@ ${emailConfig.appName} Team
     console.log(`✅ KYC rejection email sent to ${email}: ${info.messageId}`);
   } catch (err) {
     console.error(`❌ Failed to send KYC rejection email to ${email}:`, err);
+  }
+}
+
+/**
+ * Send fund operation approved email (deposit or withdrawal)
+ */
+export async function sendFundOperationApprovedEmail(
+  email: string,
+  firstName: string,
+  type: "deposit" | "withdrawal",
+  amount: number,
+  reference: string
+) {
+  const isDeposit = type === "deposit";
+  const formattedAmount = `$${amount.toLocaleString()}`;
+
+  const body = `
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom:24px;">
+      <tr>
+        <td align="center" style="padding:24px; background:linear-gradient(135deg, #22c55e 0%, #16a34a 100%); border-radius:10px;">
+          <div style="width:60px;height:60px;background:rgba(255,255,255,0.2);border-radius:50%;display:inline-block;line-height:60px;text-align:center;font-size:28px;margin-bottom:12px;">&#10003;</div>
+          <h2 style="margin:0; font-size:22px; font-weight:700; color:#ffffff;">${isDeposit ? "Deposit Approved" : "Withdrawal Processed"}</h2>
+          <p style="margin:8px 0 0; font-size:14px; color:rgba(255,255,255,0.9);">${isDeposit ? "Funds have been credited to your account" : "Your withdrawal has been processed"}</p>
+        </td>
+      </tr>
+    </table>
+    ${paragraph(`Hello <strong>${firstName}</strong>,`)}
+    ${paragraph(isDeposit
+      ? `Great news! Your deposit request has been <strong>approved</strong> and the funds have been credited to your Alvarado account.`
+      : `Your withdrawal request has been <strong>approved</strong> and is now being processed.`
+    )}
+    ${bigAmount(formattedAmount, "#16a34a")}
+    ${successBox(`
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+        <tr>
+          <td style="padding:6px 0; font-size:14px; color:#6b7280; width:120px;">Type</td>
+          <td style="padding:6px 0; font-size:14px; color:#1f2937; font-weight:500;">${isDeposit ? "Deposit" : "Withdrawal"}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0; font-size:14px; color:#6b7280;">Amount</td>
+          <td style="padding:6px 0; font-size:14px; color:#1f2937; font-weight:500;">${formattedAmount}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0; font-size:14px; color:#6b7280;">Reference</td>
+          <td style="padding:6px 0; font-size:14px; color:#1f2937; font-weight:500; font-family:'Courier New',monospace;">${reference}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0; font-size:14px; color:#6b7280;">Status</td>
+          <td style="padding:6px 0; font-size:14px; color:#16a34a; font-weight:600;">Completed</td>
+        </tr>
+      </table>
+    `)}
+    ${ctaButton("View My Account", `${emailConfig.appUrl}/dashboard`, "#16a34a")}
+    ${paragraph("If you have any questions about this transaction, please contact our support team.")}
+    <p style="margin:20px 0 0; font-size:14px; color:#9ca3af;">Regards,<br><strong style="color:#374151;">${emailConfig.appName} Team</strong></p>
+  `;
+
+  const textContent = `
+Hello ${firstName},
+
+Your ${isDeposit ? "deposit" : "withdrawal"} of ${formattedAmount} has been approved.
+
+Reference: ${reference}
+Status: Completed
+
+Visit your dashboard: ${emailConfig.appUrl}/dashboard
+
+Best regards,
+${emailConfig.appName} Team
+  `.trim();
+
+  try {
+    await transporter.sendMail({
+      from: emailConfig.from,
+      to: email,
+      subject: `${isDeposit ? "Deposit approved" : "Withdrawal processed"} — ${formattedAmount} | ${emailConfig.appName}`,
+      text: textContent,
+      html: emailWrapper({
+        preheader: `Your ${isDeposit ? "deposit" : "withdrawal"} of ${formattedAmount} has been approved.`,
+        body,
+      }),
+    });
+    console.log(`✅ Fund operation approved email sent to ${email}`);
+  } catch (err) {
+    console.error(`❌ Failed to send fund operation approved email to ${email}:`, err);
+  }
+}
+
+/**
+ * Send fund operation rejected email (deposit or withdrawal)
+ */
+export async function sendFundOperationRejectedEmail(
+  email: string,
+  firstName: string,
+  type: "deposit" | "withdrawal",
+  amount: number,
+  reason?: string
+) {
+  const isDeposit = type === "deposit";
+  const formattedAmount = `$${amount.toLocaleString()}`;
+  const defaultReason = isDeposit
+    ? "Your deposit request did not meet our requirements. Please contact support for more details."
+    : "Your withdrawal request could not be processed. Please contact support for more details.";
+
+  const body = `
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom:24px;">
+      <tr>
+        <td align="center" style="padding:24px; background:linear-gradient(135deg, #ef4444 0%, #dc2626 100%); border-radius:10px;">
+          <div style="width:60px;height:60px;background:rgba(255,255,255,0.2);border-radius:50%;display:inline-block;line-height:60px;text-align:center;font-size:28px;margin-bottom:12px;">&#10007;</div>
+          <h2 style="margin:0; font-size:22px; font-weight:700; color:#ffffff;">${isDeposit ? "Deposit Request Rejected" : "Withdrawal Request Rejected"}</h2>
+          <p style="margin:8px 0 0; font-size:14px; color:rgba(255,255,255,0.9);">Your request requires attention</p>
+        </td>
+      </tr>
+    </table>
+    ${paragraph(`Hello <strong>${firstName}</strong>,`)}
+    ${paragraph(`We have reviewed your ${isDeposit ? "deposit" : "withdrawal"} request of <strong>${formattedAmount}</strong> and unfortunately it has been <strong>rejected</strong>.`)}
+    ${dangerBox(`
+      <p style="margin:0 0 8px; font-size:14px; font-weight:600; color:#b91c1c;">Reason:</p>
+      <p style="margin:0; font-size:14px; color:#7f1d1d;">${reason || defaultReason}</p>
+    `)}
+    ${paragraph("If you believe this was an error or need further clarification, please reach out to our support team.")}
+    ${ctaButton("Contact Support", `mailto:support@alvarado.com`, "#dc2626")}
+    <p style="margin:20px 0 0; font-size:14px; color:#9ca3af;">Regards,<br><strong style="color:#374151;">${emailConfig.appName} Team</strong></p>
+  `;
+
+  const textContent = `
+Hello ${firstName},
+
+Your ${isDeposit ? "deposit" : "withdrawal"} request of ${formattedAmount} has been rejected.
+
+Reason: ${reason || defaultReason}
+
+If you have questions, contact us at support@alvarado.com
+
+Best regards,
+${emailConfig.appName} Team
+  `.trim();
+
+  try {
+    await transporter.sendMail({
+      from: emailConfig.from,
+      to: email,
+      subject: `${isDeposit ? "Deposit" : "Withdrawal"} request rejected — ${emailConfig.appName}`,
+      text: textContent,
+      html: emailWrapper({
+        preheader: `Your ${isDeposit ? "deposit" : "withdrawal"} request of ${formattedAmount} was not approved.`,
+        body,
+      }),
+    });
+    console.log(`✅ Fund operation rejected email sent to ${email}`);
+  } catch (err) {
+    console.error(`❌ Failed to send fund operation rejected email to ${email}:`, err);
   }
 }

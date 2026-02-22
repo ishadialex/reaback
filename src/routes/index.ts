@@ -27,6 +27,7 @@ import adminInvestmentsRoutes from "./admin/investments.routes.js";
 import adminPropertiesRoutes from "./admin/properties.routes.js";
 import adminUsersRoutes from "./admin/users.routes.js";
 import adminKycRoutes from "./admin/kyc.routes.js";
+import adminFundOperationsRoutes from "./admin/fundOperations.routes.js";
 import kycRoutes from "./kyc.routes.js";
 
 const router = Router();
@@ -69,5 +70,6 @@ router.use("/admin/investments", adminInvestmentsRoutes);
 router.use("/admin/properties", adminPropertiesRoutes);
 router.use("/admin/users", adminUsersRoutes);
 router.use("/admin/kyc", adminKycRoutes);
+router.use("/admin/fund-operations", adminFundOperationsRoutes);
 
 export default router;
