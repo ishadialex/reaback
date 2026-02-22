@@ -3,10 +3,22 @@ import { prisma } from "../../config/database.js";
 import { success, error } from "../../utils/response.js";
 
 /**
- * Validate investmentType and category combination
- * All categories are allowed for both individual and pooled investment types
+ * Validate investmentType and category combination.
+ *   pooled     → airbnb_arbitrage | airbnb_mortgage
+ *   individual → airbnb_arbitrage | airbnb_mortgage | for_sale
  */
-function validateInvestmentTypeCategory(_investmentType?: string, _category?: string): string | null {
+const VALID_CATEGORIES: Record<string, string[]> = {
+  pooled:     ["airbnb_arbitrage", "airbnb_mortgage"],
+  individual: ["airbnb_arbitrage", "airbnb_mortgage", "for_sale"],
+};
+
+function validateInvestmentTypeCategory(investmentType?: string, category?: string): string | null {
+  if (!investmentType || !category) return null;
+  const allowed = VALID_CATEGORIES[investmentType];
+  if (!allowed) return `Invalid investmentType "${investmentType}". Must be pooled or individual.`;
+  if (!allowed.includes(category)) {
+    return `Category "${category}" is not allowed for investmentType "${investmentType}". Allowed: ${allowed.join(", ")}.`;
+  }
   return null;
 }
 
@@ -14,35 +26,46 @@ function validateInvestmentTypeCategory(_investmentType?: string, _category?: st
 function parsePropertyBody(body: any) {
   const data: any = {};
 
-  // Strings
-  if (body.title) data.title = body.title;
-  if (body.subject) data.subject = body.subject;
-  if (body.location) data.location = body.location;
-  if (body.description) data.description = body.description;
-  if (body.type) data.type = body.type;
-  if (body.category) data.category = body.category;
-  if (body.investmentType) data.investmentType = body.investmentType;
-  if (body.investmentStatus) data.investmentStatus = body.investmentStatus;
-  if (body.riskLevel) data.riskLevel = body.riskLevel;
-  if (body.managerName) data.managerName = body.managerName;
-  if (body.managerRole) data.managerRole = body.managerRole;
-  if (body.managerPhone) data.managerPhone = body.managerPhone;
-
   // Helper: parse float, fallback to 0 if missing or NaN
   const toFloat = (val: any): number => { const n = Number(val); return isNaN(n) ? 0 : n; };
   // Helper: parse int, fallback to 0 if missing or NaN
   const toInt = (val: any): number => { const n = parseInt(val, 10); return isNaN(n) ? 0 : n; };
+  // Helper: parse optional float (null if not provided)
+  const toFloatOpt = (val: any): number | null => { if (val === undefined || val === null || val === "") return null; const n = Number(val); return isNaN(n) ? null : n; };
+  // Helper: parse optional int (null if not provided)
+  const toIntOpt = (val: any): number | null => { if (val === undefined || val === null || val === "") return null; const n = parseInt(val, 10); return isNaN(n) ? null : n; };
+  // Helper: parse JSON array or comma-separated string
+  const toArray = (val: any): string[] => {
+    if (!val) return [];
+    if (Array.isArray(val)) return val.map((s: any) => String(s).trim());
+    try { const parsed = JSON.parse(val); return Array.isArray(parsed) ? parsed : []; }
+    catch { return val.split(",").map((s: string) => s.trim()).filter(Boolean); }
+  };
 
-  // Numbers (floats) — always set so Prisma never gets undefined/NaN
-  data.price = toFloat(body.price);
-  data.minInvestment = toFloat(body.minInvestment);
-  data.maxInvestment = toFloat(body.maxInvestment);
-  data.targetAmount = toFloat(body.targetAmount);
+  // ── Core string fields ──
+  if (body.title !== undefined) data.title = body.title;
+  if (body.subject !== undefined) data.subject = body.subject;
+  if (body.location !== undefined) data.location = body.location;
+  if (body.description !== undefined) data.description = body.description;
+  if (body.type !== undefined) data.type = body.type;
+  if (body.category !== undefined) data.category = body.category;
+  if (body.investmentType !== undefined) data.investmentType = body.investmentType;
+  if (body.investmentStatus !== undefined) data.investmentStatus = body.investmentStatus;
+  if (body.riskLevel !== undefined) data.riskLevel = body.riskLevel;
+  if (body.managerName !== undefined) data.managerName = body.managerName;
+  if (body.managerRole !== undefined) data.managerRole = body.managerRole;
+  if (body.managerPhone !== undefined) data.managerPhone = body.managerPhone;
+
+  // ── Core numbers (floats) ──
+  if (body.price !== undefined) data.price = toFloat(body.price);
+  if (body.minInvestment !== undefined) data.minInvestment = toFloat(body.minInvestment);
+  if (body.maxInvestment !== undefined) data.maxInvestment = toFloat(body.maxInvestment);
+  if (body.targetAmount !== undefined) data.targetAmount = toFloat(body.targetAmount);
   if (body.currentFunded !== undefined) data.currentFunded = toFloat(body.currentFunded);
-  // expectedROI is computed — not accepted from body
   if (body.monthlyReturn !== undefined) data.monthlyReturn = toFloat(body.monthlyReturn);
+  // expectedROI is computed — not accepted from body
 
-  // Numbers (ints)
+  // ── Core numbers (ints) ──
   if (body.duration !== undefined) data.duration = toInt(body.duration);
   if (body.bedrooms !== undefined) data.bedrooms = toInt(body.bedrooms);
   if (body.bathrooms !== undefined) data.bathrooms = toInt(body.bathrooms);
@@ -50,18 +73,103 @@ function parsePropertyBody(body: any) {
   if (body.sqft !== undefined) data.sqft = toInt(body.sqft);
   if (body.investorCount !== undefined) data.investorCount = toInt(body.investorCount);
 
-  // Booleans
-  if (body.isFeatured !== undefined) data.isFeatured = body.isFeatured === "true";
-  if (body.isActive !== undefined) data.isActive = body.isActive === "true";
+  // ── Core booleans ──
+  if (body.isFeatured !== undefined) data.isFeatured = body.isFeatured === "true" || body.isFeatured === true;
+  if (body.isActive !== undefined) data.isActive = body.isActive === "true" || body.isActive === true;
 
-  // Arrays (sent as comma-separated or JSON)
-  if (body.features) {
-    try {
-      data.features = JSON.parse(body.features);
-    } catch {
-      data.features = body.features.split(",").map((s: string) => s.trim());
-    }
+  // ── Core array ──
+  if (body.features !== undefined) data.features = toArray(body.features);
+
+  // ── Map coordinates ──
+  if (body.latitude !== undefined) data.latitude = toFloatOpt(body.latitude);
+  if (body.longitude !== undefined) data.longitude = toFloatOpt(body.longitude);
+
+  // ── Interior (for_sale) ──
+  if (body.fullBathrooms !== undefined) data.fullBathrooms = toIntOpt(body.fullBathrooms);
+  if (body.heating !== undefined) data.heating = toArray(body.heating);
+  if (body.cooling !== undefined) data.cooling = toArray(body.cooling);
+  if (body.appliancesIncluded !== undefined) data.appliancesIncluded = toArray(body.appliancesIncluded);
+  if (body.laundry !== undefined) data.laundry = toArray(body.laundry);
+  if (body.interiorFeatures !== undefined) data.interiorFeatures = toArray(body.interiorFeatures);
+  if (body.flooring !== undefined) data.flooring = toArray(body.flooring);
+  if (body.windows !== undefined) data.windows = toArray(body.windows);
+  if (body.basement !== undefined) data.basement = body.basement;
+  if (body.fireplaceCount !== undefined) data.fireplaceCount = toInt(body.fireplaceCount);
+  if (body.fireplaceFeatures !== undefined) data.fireplaceFeatures = toArray(body.fireplaceFeatures);
+  if (body.totalStructureArea !== undefined) data.totalStructureArea = body.totalStructureArea;
+  if (body.totalLivableArea !== undefined) data.totalLivableArea = body.totalLivableArea;
+
+  // ── Property exterior (for_sale) ──
+  if (body.levels !== undefined) data.levels = body.levels;
+  if (body.stories !== undefined) data.stories = toInt(body.stories);
+  if (body.patioAndPorch !== undefined) data.patioAndPorch = toArray(body.patioAndPorch);
+  if (body.exteriorFeatures !== undefined) data.exteriorFeatures = toArray(body.exteriorFeatures);
+  if (body.poolFeatures !== undefined) data.poolFeatures = toArray(body.poolFeatures);
+  if (body.hasSpa !== undefined) data.hasSpa = body.hasSpa === "true" || body.hasSpa === true;
+  if (body.spaFeatures !== undefined) data.spaFeatures = toArray(body.spaFeatures);
+  if (body.fencing !== undefined) data.fencing = toArray(body.fencing);
+
+  // ── Lot (for_sale) ──
+  if (body.lotFeatures !== undefined) data.lotFeatures = toArray(body.lotFeatures);
+  if (body.additionalStructures !== undefined) data.additionalStructures = body.additionalStructures;
+  if (body.parcelNumber !== undefined) data.parcelNumber = body.parcelNumber;
+
+  // ── Construction (for_sale) ──
+  if (body.homeType !== undefined) data.homeType = body.homeType;
+  if (body.propertySubtype !== undefined) data.propertySubtype = body.propertySubtype;
+  if (body.constructionMaterials !== undefined) data.constructionMaterials = toArray(body.constructionMaterials);
+  if (body.foundation !== undefined) data.foundation = toArray(body.foundation);
+  if (body.roof !== undefined) data.roof = toArray(body.roof);
+  if (body.yearBuilt !== undefined) data.yearBuilt = toInt(body.yearBuilt);
+
+  // ── Utilities (for_sale) ──
+  if (body.sewer !== undefined) data.sewer = toArray(body.sewer);
+  if (body.water !== undefined) data.water = toArray(body.water);
+  if (body.utilitiesForProperty !== undefined) data.utilitiesForProperty = toArray(body.utilitiesForProperty);
+
+  // ── Community & HOA (for_sale) ──
+  if (body.communityFeatures !== undefined) data.communityFeatures = toArray(body.communityFeatures);
+  if (body.security !== undefined) data.security = toArray(body.security);
+  if (body.subdivision !== undefined) data.subdivision = body.subdivision;
+  if (body.hasHOA !== undefined) data.hasHOA = body.hasHOA === "true" || body.hasHOA === true;
+  if (body.hoaFee !== undefined) data.hoaFee = body.hoaFee;
+  if (body.region !== undefined) data.region = body.region;
+
+  // ── Financial & Listing (for_sale) ──
+  if (body.pricePerSqft !== undefined) data.pricePerSqft = body.pricePerSqft;
+  if (body.taxAssessedValue !== undefined) data.taxAssessedValue = body.taxAssessedValue;
+  if (body.annualTaxAmount !== undefined) data.annualTaxAmount = body.annualTaxAmount;
+  if (body.dateOnMarket !== undefined) data.dateOnMarket = body.dateOnMarket;
+  if (body.daysOnMarket !== undefined) data.daysOnMarket = toInt(body.daysOnMarket);
+  if (body.listingTerms !== undefined) data.listingTerms = toArray(body.listingTerms);
+
+  // ── Market Value (for_sale) ──
+  if (body.zestimate !== undefined) data.zestimate = body.zestimate;
+  if (body.estimatedSalesRangeLow !== undefined) data.estimatedSalesRangeLow = body.estimatedSalesRangeLow;
+  if (body.estimatedSalesRangeHigh !== undefined) data.estimatedSalesRangeHigh = body.estimatedSalesRangeHigh;
+  if (body.rentZestimate !== undefined) data.rentZestimate = body.rentZestimate;
+  if (body.zestimateChangePercent !== undefined) data.zestimateChangePercent = body.zestimateChangePercent;
+  if (body.zestimateChangeYears !== undefined) data.zestimateChangeYears = toInt(body.zestimateChangeYears);
+  if (body.priceHistory !== undefined) {
+    try { data.priceHistory = typeof body.priceHistory === "string" ? JSON.parse(body.priceHistory) : body.priceHistory; }
+    catch { data.priceHistory = []; }
   }
+
+  // ── Climate Risks (for_sale) ──
+  if (body.floodZone !== undefined) data.floodZone = body.floodZone;
+  if (body.floodZoneDescription !== undefined) data.floodZoneDescription = body.floodZoneDescription;
+  if (body.fireRisk !== undefined) data.fireRisk = body.fireRisk;
+  if (body.windRisk !== undefined) data.windRisk = body.windRisk;
+  if (body.airQualityRisk !== undefined) data.airQualityRisk = body.airQualityRisk;
+  if (body.firstStreetUrl !== undefined) data.firstStreetUrl = body.firstStreetUrl;
+
+  // ── Getting Around (for_sale) ──
+  if (body.walkScore !== undefined) data.walkScore = toIntOpt(body.walkScore);
+  if (body.walkScoreDescription !== undefined) data.walkScoreDescription = body.walkScoreDescription;
+  if (body.bikeScore !== undefined) data.bikeScore = toIntOpt(body.bikeScore);
+  if (body.bikeScoreDescription !== undefined) data.bikeScoreDescription = body.bikeScoreDescription;
+  if (body.transitScore !== undefined) data.transitScore = toIntOpt(body.transitScore);
+  if (body.transitScoreDescription !== undefined) data.transitScoreDescription = body.transitScoreDescription;
 
   return data;
 }

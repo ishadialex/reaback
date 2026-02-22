@@ -310,7 +310,7 @@ model Property {
   location         String
   price            Float            @default(0)
   type             String           @default("residential") // residential | commercial | land
-  category         String           @default("arbitrage")   // arbitrage | mortgage | airbnb
+  category         String           @default("airbnb_arbitrage") // airbnb_arbitrage | airbnb_mortgage | for_sale (for_sale only valid for individual)
   investmentType   String           @default("individual")  // individual | pooled
   minInvestment    Float            @default(0)
   maxInvestment    Float            @default(0)
@@ -335,6 +335,83 @@ model Property {
   managerRole      String           @default("")
   managerPhone     String           @default("")
   managerPhoto     String?
+  // ── Map coordinates ──
+  latitude                Float?
+  longitude               Float?
+  // ── Interior (for_sale) ──
+  fullBathrooms           Int?
+  heating                 String[]  @default([])
+  cooling                 String[]  @default([])
+  appliancesIncluded      String[]  @default([])
+  laundry                 String[]  @default([])
+  interiorFeatures        String[]  @default([])
+  flooring                String[]  @default([])
+  windows                 String[]  @default([])
+  basement                String    @default("")
+  fireplaceCount          Int       @default(0)
+  fireplaceFeatures       String[]  @default([])
+  totalStructureArea      String    @default("")
+  totalLivableArea        String    @default("")
+  // ── Property exterior (for_sale) ──
+  levels                  String    @default("")
+  stories                 Int       @default(0)
+  patioAndPorch           String[]  @default([])
+  exteriorFeatures        String[]  @default([])
+  poolFeatures            String[]  @default([])
+  hasSpa                  Boolean   @default(false)
+  spaFeatures             String[]  @default([])
+  fencing                 String[]  @default([])
+  // ── Lot (for_sale) ──
+  lotFeatures             String[]  @default([])
+  additionalStructures    String    @default("")
+  parcelNumber            String    @default("")
+  // ── Construction (for_sale) ──
+  homeType                String    @default("")
+  propertySubtype         String    @default("")
+  constructionMaterials   String[]  @default([])
+  foundation              String[]  @default([])
+  roof                    String[]  @default([])
+  yearBuilt               Int       @default(0)
+  // ── Utilities (for_sale) ──
+  sewer                   String[]  @default([])
+  water                   String[]  @default([])
+  utilitiesForProperty    String[]  @default([])
+  // ── Community & HOA (for_sale) ──
+  communityFeatures       String[]  @default([])
+  security                String[]  @default([])
+  subdivision             String    @default("")
+  hasHOA                  Boolean   @default(false)
+  hoaFee                  String    @default("")
+  region                  String    @default("")
+  // ── Financial & Listing (for_sale) ──
+  pricePerSqft            String    @default("")
+  taxAssessedValue        String    @default("")
+  annualTaxAmount         String    @default("")
+  dateOnMarket            String    @default("")
+  daysOnMarket            Int       @default(0)
+  listingTerms            String[]  @default([])
+  // ── Market Value (for_sale) ──
+  zestimate               String    @default("")
+  estimatedSalesRangeLow  String    @default("")
+  estimatedSalesRangeHigh String    @default("")
+  rentZestimate           String    @default("")
+  zestimateChangePercent  String    @default("")
+  zestimateChangeYears    Int       @default(0)
+  priceHistory            Json?
+  // ── Climate Risks (for_sale) ──
+  floodZone               String    @default("")
+  floodZoneDescription    String    @default("")
+  fireRisk                String    @default("")
+  windRisk                String    @default("")
+  airQualityRisk          String    @default("")
+  firstStreetUrl          String    @default("")
+  // ── Getting Around (for_sale) ──
+  walkScore               Int?
+  walkScoreDescription    String    @default("")
+  bikeScore               Int?
+  bikeScoreDescription    String    @default("")
+  transitScore            Int?
+  transitScoreDescription String    @default("")
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   userInvestments  UserInvestment[]
