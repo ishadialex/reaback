@@ -13,6 +13,7 @@ import {
   updateUserRole,
   updateUserStatus,
   updateUserKyc,
+  updateUserBalance,
   getUserStats,
 } from "../../controllers/admin/users.controller.js";
 
@@ -28,5 +29,6 @@ router.get("/:id", getUser);
 router.patch("/:id/role", validate(updateUserRoleSchema), updateUserRole);
 router.patch("/:id/status", validate(updateUserStatusSchema), updateUserStatus);
 router.patch("/:id/kyc", validate(updateUserKycSchema), updateUserKyc);
+router.patch("/:id/balance", updateUserBalance);
 
 export default router;

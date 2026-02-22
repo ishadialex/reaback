@@ -200,6 +200,72 @@ export async function updateUserKyc(req: Request, res: Response) {
   }
 }
 
+export async function updateUserBalance(req: Request, res: Response) {
+  try {
+    const id = req.params.id as string;
+    const { amount, note } = req.body;
+
+    const numAmount = parseFloat(amount);
+    if (isNaN(numAmount) || numAmount === 0) {
+      return error(res, "Invalid amount", 400);
+    }
+
+    const existingUser = await prisma.user.findUnique({ where: { id } });
+    if (!existingUser) {
+      return error(res, "User not found", 404);
+    }
+
+    const isDeduct = numAmount < 0;
+    const absAmount = Math.abs(numAmount);
+
+    if (isDeduct && existingUser.balance < absAmount) {
+      return error(res, "Deduction exceeds current balance", 400);
+    }
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id },
+        data: { balance: { increment: numAmount } },
+      }),
+      prisma.transaction.create({
+        data: {
+          userId: id,
+          type: "admin_bonus",
+          amount: numAmount,
+          status: "completed",
+          description: note
+            ? note
+            : isDeduct
+              ? `Admin deducted $${absAmount.toLocaleString()} from balance`
+              : `Admin added $${absAmount.toLocaleString()} to balance`,
+        },
+      }),
+      prisma.notification.create({
+        data: {
+          userId: id,
+          type: "transaction",
+          title: isDeduct ? "Balance Deducted" : "Balance Added",
+          message: note
+            ? note
+            : isDeduct
+              ? `$${absAmount.toLocaleString()} has been deducted from your account balance.`
+              : `$${absAmount.toLocaleString()} has been added to your account balance.`,
+        },
+      }),
+    ]);
+
+    const updated = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, email: true, firstName: true, lastName: true, balance: true },
+    });
+
+    return success(res, updated, isDeduct ? "Balance deducted" : "Balance added");
+  } catch (err) {
+    console.error("Update balance error:", err);
+    return error(res, "Failed to update balance", 500);
+  }
+}
+
 export async function getUserStats(req: Request, res: Response) {
   try {
     const [totalUsers, activeUsers, verifiedUsers, adminCount, superadminCount] = await Promise.all([

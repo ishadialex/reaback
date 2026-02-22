@@ -159,13 +159,11 @@ export async function createPropertyInvestment(req: Request, res: Response) {
 
     const isTopUp = !!existingInvestment;
 
-    // Only block new investments when the property is unavailable or fully funded
-    if (!isTopUp && (property.investmentStatus !== "available" || (currentFunded >= property.targetAmount && property.targetAmount > 0))) {
+    if (property.investmentStatus !== "available" || (currentFunded >= property.targetAmount && property.targetAmount > 0)) {
       return error(res, "Property is not available for investment", 400);
     }
 
-    // For new investments, enforce minInvestment; for top-ups, any positive amount is fine
-    if (!isTopUp && numAmount < property.minInvestment) {
+    if (numAmount < property.minInvestment) {
       return error(res, `Minimum investment is $${property.minInvestment}`, 400);
     }
 
@@ -182,33 +180,12 @@ export async function createPropertyInvestment(req: Request, res: Response) {
       }
     }
 
-    // Compute dynamic balance
-    const [txList, completedFundOps] = await Promise.all([
-      prisma.transaction.findMany({
-        where: { userId, status: "completed" },
-        select: { type: true, amount: true },
-      }),
-      prisma.fundOperation.findMany({
-        where: { userId, status: { in: ["completed", "approved"] } },
-        select: { type: true, amount: true },
-      }),
-    ]);
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { balance: true },
+    });
 
-    let balance = 0;
-    for (const tx of txList) {
-      switch (tx.type) {
-        case "deposit": case "profit": case "admin_bonus": case "referral": case "transfer_received":
-          balance += tx.amount; break;
-        case "withdrawal": case "investment": case "transfer_sent":
-          balance -= Math.abs(tx.amount); break;
-      }
-    }
-    for (const op of completedFundOps) {
-      if (op.type === "deposit") balance += op.amount;
-      else if (op.type === "withdrawal") balance -= op.amount;
-    }
-
-    if (balance < numAmount) {
+    if (!user || user.balance < numAmount) {
       return error(res, "Insufficient balance", 400);
     }
 
@@ -250,6 +227,12 @@ export async function createPropertyInvestment(req: Request, res: Response) {
             : `Property investment: ${property.title}`,
           reference: propertyId,
         },
+      });
+
+      // Deduct from user balance
+      await tx.user.update({
+        where: { id: userId },
+        data: { balance: { decrement: numAmount } },
       });
 
       // Update property funding; only increment investorCount for new investors

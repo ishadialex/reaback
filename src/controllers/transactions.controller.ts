@@ -7,7 +7,11 @@ export async function getBalanceSummary(req: Request, res: Response) {
   try {
     const userId = req.userId!;
 
-    const [transactions, pendingFundOps, completedFundOps] = await Promise.all([
+    const [user, transactions, pendingFundOps, completedFundOps] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { balance: true },
+      }),
       prisma.transaction.findMany({
         where: { userId, status: "completed" },
         select: { type: true, amount: true },
@@ -50,10 +54,7 @@ export async function getBalanceSummary(req: Request, res: Response) {
       else if (op.type === "withdrawal") withdrawals += op.amount;
     }
 
-    // balance = (deposits + profits + admin bonuses + referral bonuses + transfers in)
-    //         - (withdrawals + invested funds + transfers out)
-    const balance = (deposits + profits + adminBonuses + referralBonuses + transferIn)
-      - (withdrawals + investedFunds + transferOut);
+    const balance = user?.balance ?? 0;
 
     // Pending amounts from fund operations awaiting admin approval
     const pendingDeposits = pendingFundOps
