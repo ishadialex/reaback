@@ -383,6 +383,9 @@ model Property {
   hasHOA                  Boolean   @default(false)
   hoaFee                  String    @default("")
   region                  String    @default("")
+  // ── Bid tracking (for_sale) ──
+  bidCount            Int       @default(0)
+  recentBidAmount     Float     @default(0)
   // ── Financial & Listing (for_sale) ──
   pricePerSqft            String    @default("")
   taxAssessedValue        String    @default("")

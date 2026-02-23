@@ -72,6 +72,8 @@ function parsePropertyBody(body: any) {
   if (body.parking !== undefined) data.parking = toInt(body.parking);
   if (body.sqft !== undefined) data.sqft = toInt(body.sqft);
   if (body.investorCount !== undefined) data.investorCount = toInt(body.investorCount);
+  if (body.bidCount !== undefined) data.bidCount = toInt(body.bidCount);
+  if (body.recentBidAmount !== undefined) data.recentBidAmount = toFloat(body.recentBidAmount);
 
   // ── Core booleans ──
   if (body.isFeatured !== undefined) data.isFeatured = body.isFeatured === "true" || body.isFeatured === true;

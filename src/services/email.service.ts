@@ -460,3 +460,207 @@ ${emailConfig.appName} Team
     console.error(`❌ Failed to send fund operation rejected email to ${email}:`, err);
   }
 }
+
+// ─── Bid Emails ────────────────────────────────────────────────────────────────
+
+export async function sendBidSubmittedEmailToAdmin(
+  adminEmail: string,
+  user: { name: string; email: string },
+  property: { title: string; location: string },
+  amount: number
+) {
+  const formattedAmount = `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+
+  const body = `
+    ${paragraph(`A new bid has been submitted and requires your review.`)}
+    ${infoBox(`
+      <p style="margin:0 0 6px; font-size:14px;"><strong>Property:</strong> ${property.title}</p>
+      <p style="margin:0 0 6px; font-size:14px;"><strong>Location:</strong> ${property.location}</p>
+      <p style="margin:0 0 6px; font-size:14px;"><strong>Bidder:</strong> ${user.name}</p>
+      <p style="margin:0 0 6px; font-size:14px;"><strong>Bidder Email:</strong> ${user.email}</p>
+      <p style="margin:0; font-size:14px;"><strong>Bid Amount:</strong> ${formattedAmount}</p>
+    `)}
+    ${paragraph("Please review this bid and follow up with the bidder via email to proceed with the purchase process.")}
+  `;
+
+  const textContent = `
+New Bid Submitted
+
+Property: ${property.title}
+Location: ${property.location}
+Bidder: ${user.name} (${user.email})
+Bid Amount: ${formattedAmount}
+
+Please review and follow up with the bidder.
+  `.trim();
+
+  try {
+    await transporter.sendMail({
+      from: emailConfig.from,
+      to: adminEmail,
+      replyTo: user.email,
+      subject: `[New Bid] ${formattedAmount} on ${property.title} — ${user.name}`,
+      text: textContent,
+      html: emailWrapper({ preheader: `New bid of ${formattedAmount} on ${property.title}`, body }),
+    });
+    console.log(`✅ Bid admin notification sent for ${property.title}`);
+  } catch (err) {
+    console.error(`❌ Failed to send bid admin email:`, err);
+  }
+}
+
+export async function sendBidConfirmationEmailToUser(
+  email: string,
+  firstName: string,
+  propertyTitle: string,
+  amount: number
+) {
+  const formattedAmount = `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+
+  const body = `
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom:24px;">
+      <tr>
+        <td align="center" style="padding:24px; background:linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); border-radius:10px;">
+          <div style="width:60px;height:60px;background:rgba(255,255,255,0.2);border-radius:50%;display:inline-block;line-height:60px;text-align:center;font-size:28px;margin-bottom:12px;">🏘️</div>
+          <h2 style="margin:0; font-size:22px; font-weight:700; color:#ffffff;">Bid Received!</h2>
+          <p style="margin:8px 0 0; font-size:14px; color:rgba(255,255,255,0.9);">Your bid is under review</p>
+        </td>
+      </tr>
+    </table>
+    ${paragraph(`Hello <strong>${firstName}</strong>,`)}
+    ${paragraph(`We have successfully received your bid of <strong>${formattedAmount}</strong> on <strong>${propertyTitle}</strong>.`)}
+    ${bigAmount(formattedAmount)}
+    ${successBox(`
+      <p style="margin:0 0 6px; font-size:14px; font-weight:600; color:#166534;">What happens next?</p>
+      <p style="margin:0; font-size:14px; color:#14532d;">Our team will review your bid and reach out to you via email with next steps to complete your purchase. Please keep an eye on your inbox (and spam folder).</p>
+    `)}
+    ${paragraph("If you have any questions in the meantime, feel free to contact our support team.")}
+    ${ctaButton("View Property", `${emailConfig.appUrl}/dashboard/property-market/properties`, BRAND_PRIMARY)}
+    <p style="margin:20px 0 0; font-size:14px; color:#9ca3af;">Regards,<br><strong style="color:#374151;">${emailConfig.appName} Team</strong></p>
+  `;
+
+  const textContent = `
+Hello ${firstName},
+
+Your bid of ${formattedAmount} on ${propertyTitle} has been received.
+
+Our team will review your bid and contact you via email with next steps for purchase. Please keep an eye on your inbox.
+
+Best regards,
+${emailConfig.appName} Team
+  `.trim();
+
+  try {
+    await transporter.sendMail({
+      from: emailConfig.from,
+      to: email,
+      subject: `Bid received — ${propertyTitle} | ${emailConfig.appName}`,
+      text: textContent,
+      html: emailWrapper({ preheader: `Your bid of ${formattedAmount} on ${propertyTitle} was received.`, body }),
+    });
+    console.log(`✅ Bid confirmation email sent to ${email}`);
+  } catch (err) {
+    console.error(`❌ Failed to send bid confirmation email to ${email}:`, err);
+  }
+}
+
+// ─── Buy Now Emails ────────────────────────────────────────────────────────────
+
+export async function sendBuyNowEmailToAdmin(
+  adminEmail: string,
+  user: { name: string; email: string },
+  property: { title: string; location: string; price: number }
+) {
+  const formattedPrice = `$${property.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+
+  const body = `
+    ${paragraph(`A direct purchase request has been submitted and requires your attention.`)}
+    ${infoBox(`
+      <p style="margin:0 0 6px; font-size:14px;"><strong>Property:</strong> ${property.title}</p>
+      <p style="margin:0 0 6px; font-size:14px;"><strong>Location:</strong> ${property.location}</p>
+      <p style="margin:0 0 6px; font-size:14px;"><strong>Listed Price:</strong> ${formattedPrice}</p>
+      <p style="margin:0 0 6px; font-size:14px;"><strong>Buyer:</strong> ${user.name}</p>
+      <p style="margin:0; font-size:14px;"><strong>Buyer Email:</strong> ${user.email}</p>
+    `)}
+    ${paragraph("Please assign a property manager to follow up with the buyer as soon as possible.")}
+  `;
+
+  const textContent = `
+Direct Purchase Request
+
+Property: ${property.title}
+Location: ${property.location}
+Listed Price: ${formattedPrice}
+Buyer: ${user.name} (${user.email})
+
+Please assign a property manager to follow up with the buyer.
+  `.trim();
+
+  try {
+    await transporter.sendMail({
+      from: emailConfig.from,
+      to: adminEmail,
+      replyTo: user.email,
+      subject: `[Buy Now] ${property.title} — ${user.name}`,
+      text: textContent,
+      html: emailWrapper({ preheader: `Direct purchase request for ${property.title} from ${user.name}`, body }),
+    });
+    console.log(`✅ Buy now admin notification sent for ${property.title}`);
+  } catch (err) {
+    console.error(`❌ Failed to send buy now admin email:`, err);
+  }
+}
+
+export async function sendBuyNowConfirmationEmailToUser(
+  email: string,
+  firstName: string,
+  property: { title: string; location: string; price: number }
+) {
+  const formattedPrice = `$${property.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+
+  const body = `
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom:24px;">
+      <tr>
+        <td align="center" style="padding:24px; background:linear-gradient(135deg, #16a34a 0%, #15803d 100%); border-radius:10px;">
+          <div style="width:60px;height:60px;background:rgba(255,255,255,0.2);border-radius:50%;display:inline-block;line-height:60px;text-align:center;font-size:28px;margin-bottom:12px;">🏠</div>
+          <h2 style="margin:0; font-size:22px; font-weight:700; color:#ffffff;">Purchase Request Received!</h2>
+          <p style="margin:8px 0 0; font-size:14px; color:rgba(255,255,255,0.9);">A property manager will reach out to you shortly</p>
+        </td>
+      </tr>
+    </table>
+    ${paragraph(`Hello <strong>${firstName}</strong>,`)}
+    ${paragraph(`We have received your purchase request for <strong>${property.title}</strong> listed at <strong>${formattedPrice}</strong>.`)}
+    ${bigAmount(formattedPrice)}
+    ${successBox(`
+      <p style="margin:0 0 6px; font-size:14px; font-weight:600; color:#166534;">What happens next?</p>
+      <p style="margin:0; font-size:14px; color:#14532d;">A dedicated property manager will contact you via email shortly to guide you through the purchase process, documentation, and next steps.</p>
+    `)}
+    ${paragraph("Please keep an eye on your inbox — including your spam/junk folder. If you have any questions, feel free to reach out to our support team.")}
+    ${ctaButton("View Property", `${emailConfig.appUrl}/dashboard/property-market/properties`, BRAND_PRIMARY)}
+    <p style="margin:20px 0 0; font-size:14px; color:#9ca3af;">Regards,<br><strong style="color:#374151;">${emailConfig.appName} Team</strong></p>
+  `;
+
+  const textContent = `
+Hello ${firstName},
+
+Your purchase request for ${property.title} (${formattedPrice}) has been received.
+
+A property manager will contact you via email shortly with next steps. Please keep an eye on your inbox.
+
+Best regards,
+${emailConfig.appName} Team
+  `.trim();
+
+  try {
+    await transporter.sendMail({
+      from: emailConfig.from,
+      to: email,
+      subject: `Purchase request received — ${property.title} | ${emailConfig.appName}`,
+      text: textContent,
+      html: emailWrapper({ preheader: `Your purchase request for ${property.title} was received. A property manager will reach out soon.`, body }),
+    });
+    console.log(`✅ Buy now confirmation email sent to ${email}`);
+  } catch (err) {
+    console.error(`❌ Failed to send buy now confirmation email to ${email}:`, err);
+  }
+}

@@ -177,6 +177,9 @@ function mapProperty(p: any) {
     hasHOA: p.hasHOA || false,
     hoaFee: p.hoaFee || "",
     region: p.region || "",
+    // ── Bid tracking (for_sale) ──
+    bidCount: p.bidCount ?? 0,
+    recentBidAmount: p.recentBidAmount ?? 0,
     // ── Financial & Listing (for_sale) ──
     pricePerSqft: p.pricePerSqft || "",
     taxAssessedValue: p.taxAssessedValue || "",
