@@ -20,6 +20,9 @@ model TeamMember {
   role      String
   image     String
   instagram String?
+  linkedin  String?
+  facebook  String?
+  tiktok    String?
   order     Int      @default(0)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -430,7 +433,7 @@ model PropertyReview {
   propertyId String   @db.ObjectId
   property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   userId     String   @db.ObjectId
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   rating     Int      // 1-5
   title      String   @default("")
   body       String

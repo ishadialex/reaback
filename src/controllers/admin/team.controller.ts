@@ -24,7 +24,7 @@ export async function create(req: Request, res: Response) {
       return error(res, "Image is required (upload a file or provide an image URL)", 400);
     }
 
-    const { name, role, instagram, order } = req.body;
+    const { name, role, instagram, linkedin, facebook, tiktok, order } = req.body;
 
     const member = await prisma.teamMember.create({
       data: {
@@ -32,6 +32,9 @@ export async function create(req: Request, res: Response) {
         role,
         image,
         instagram: instagram || null,
+        linkedin: linkedin || null,
+        facebook: facebook || null,
+        tiktok: tiktok || null,
         order: order !== undefined ? Number(order) : 0,
       },
     });
@@ -57,6 +60,9 @@ export async function update(req: Request, res: Response) {
     if (req.body.name !== undefined) data.name = req.body.name;
     if (req.body.role !== undefined) data.role = req.body.role;
     if (req.body.instagram !== undefined) data.instagram = req.body.instagram || null;
+    if (req.body.linkedin !== undefined) data.linkedin = req.body.linkedin || null;
+    if (req.body.facebook !== undefined) data.facebook = req.body.facebook || null;
+    if (req.body.tiktok !== undefined) data.tiktok = req.body.tiktok || null;
     if (req.body.order !== undefined) data.order = Number(req.body.order);
     if (req.body.isActive !== undefined) data.isActive = req.body.isActive === "true" || req.body.isActive === true;
 
@@ -74,6 +80,7 @@ export async function update(req: Request, res: Response) {
 
     return success(res, member, "Team member updated");
   } catch (err) {
+    console.error("Update team member error:", err);
     return error(res, "Failed to update team member", 500);
   }
 }

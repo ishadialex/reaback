@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { adminAuthFlexible } from "../../middleware/adminAuthFlexible.js";
 import { uploadPropertyWithManager } from "../../middleware/upload.js";
-import { getAll, getOne, create, update, remove, hardDelete } from "../../controllers/admin/properties.controller.js";
+import { getAll, getOne, create, update, remove, hardDelete, removeImage } from "../../controllers/admin/properties.controller.js";
 
 const router = Router();
 
@@ -25,6 +25,7 @@ router.get("/", getAll);
 router.get("/:id", getOne);
 router.post("/", handleUpload, create);
 router.patch("/:id", handleUpload, update);
+router.delete("/:id/images", removeImage);
 router.delete("/:id", remove);
 router.delete("/:id/permanent", hardDelete);
 

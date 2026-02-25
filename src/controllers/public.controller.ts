@@ -13,6 +13,9 @@ export async function getTeamMembers(_req: Request, res: Response) {
         role: true,
         image: true,
         instagram: true,
+        linkedin: true,
+        facebook: true,
+        tiktok: true,
       },
     });
 

@@ -5,6 +5,9 @@ export const createTeamMemberSchema = z.object({
   role: z.string().min(1).max(100),
   image: z.string().min(1).max(1000),
   instagram: z.string().url().optional().nullable(),
+  linkedin: z.string().url().optional().nullable(),
+  facebook: z.string().url().optional().nullable(),
+  tiktok: z.string().url().optional().nullable(),
   order: z.number().int().min(0).max(100).optional().default(0),
 });
 
@@ -13,6 +16,9 @@ export const updateTeamMemberSchema = z.object({
   role: z.string().min(1).max(100).optional(),
   image: z.string().min(1).max(1000).optional(),
   instagram: z.string().url().optional().nullable(),
+  linkedin: z.string().url().optional().nullable(),
+  facebook: z.string().url().optional().nullable(),
+  tiktok: z.string().url().optional().nullable(),
   order: z.number().int().min(0).max(100).optional(),
   isActive: z.boolean().optional(),
 });

@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { prisma } from "../../config/database.js";
 import { success, error } from "../../utils/response.js";
+import { cloudinary } from "../../config/cloudinary.js";
 
 /**
  * Validate investmentType and category combination.
@@ -409,5 +410,47 @@ export async function hardDelete(req: Request, res: Response) {
   } catch (err) {
     console.error("Hard delete property error:", err);
     return error(res, "Failed to permanently delete property", 500);
+  }
+}
+
+export async function removeImage(req: Request, res: Response) {
+  try {
+    const id = req.params.id as string;
+    const url = req.body?.url;
+
+    if (!url || typeof url !== "string") {
+      return error(res, "Image URL is required", 400);
+    }
+
+    const existing = await prisma.property.findUnique({ where: { id } });
+    if (!existing) {
+      return error(res, "Property not found", 404);
+    }
+
+    if (!existing.images.includes(url)) {
+      return error(res, "Image URL not found on this property", 404);
+    }
+
+    // Extract Cloudinary public_id from URL
+    // e.g. https://res.cloudinary.com/<cloud>/image/upload/v123/folder/file.jpg
+    // public_id = folder/file (no extension)
+    const uploadIndex = url.indexOf("/upload/");
+    if (uploadIndex !== -1) {
+      const afterUpload = url.slice(uploadIndex + 8); // skip "/upload/"
+      const withoutVersion = afterUpload.replace(/^v\d+\//, ""); // strip v<digits>/
+      const publicId = withoutVersion.replace(/\.[^/.]+$/, ""); // strip extension
+      await cloudinary.uploader.destroy(publicId).catch(() => {});
+    }
+
+    const updatedImages = existing.images.filter((img) => img !== url);
+    const property = await prisma.property.update({
+      where: { id },
+      data: { images: updatedImages },
+    });
+
+    return success(res, { images: property.images }, "Image removed successfully");
+  } catch (err) {
+    console.error("Remove image error:", err);
+    return error(res, "Failed to remove image", 500);
   }
 }

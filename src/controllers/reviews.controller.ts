@@ -19,13 +19,16 @@ export async function getPublicReviews(req: Request, res: Response) {
       orderBy: { createdAt: "desc" },
     });
 
+    const validReviews = reviews.filter((r) => r.user !== null);
+
     const avgRating =
-      reviews.length > 0
-        ? Math.round((reviews.reduce((s, r) => s + r.rating, 0) / reviews.length) * 10) / 10
+      validReviews.length > 0
+        ? Math.round((validReviews.reduce((s, r) => s + r.rating, 0) / validReviews.length) * 10) / 10
         : 0;
 
-    return success(res, { reviews: reviews.map(mapReview), avgRating, total: reviews.length });
-  } catch (err) {
+    return success(res, { reviews: validReviews.map(mapReview), avgRating, total: validReviews.length });
+  } catch (err: any) {
+    console.error("getPublicReviews error:", err?.message, err?.code);
     return error(res, "Failed to fetch reviews", 500);
   }
 }
@@ -164,6 +167,7 @@ export async function getMyReviews(req: Request, res: Response) {
 export async function getAllPublicReviews(req: Request, res: Response) {
   try {
     const reviews = await prisma.propertyReview.findMany({
+      where: { isApproved: true },
       include: {
         user: { select: { firstName: true, lastName: true, profilePhoto: true } },
       },
