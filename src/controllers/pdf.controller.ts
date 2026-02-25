@@ -364,8 +364,18 @@ export async function servePdfFile(req: Request, res: Response) {
     const grantedTime = new Date(decoded.granted).toISOString();
     console.log(`✅ Serving PDF: ${document.title} - Token granted at: ${grantedTime}`);
 
-    // Redirect to the Cloudinary URL
-    return res.redirect(document.fileUrl);
+    // Proxy the PDF through the backend with inline Content-Disposition
+    // (a direct redirect causes Cloudinary to send attachment headers, forcing a download)
+    const cloudRes = await fetch(document.fileUrl);
+    if (!cloudRes.ok) {
+      return res.status(502).json({ success: false, message: "Failed to fetch PDF from storage" });
+    }
+
+    const buffer = await cloudRes.arrayBuffer();
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${document.title}.pdf"`);
+    res.setHeader("Cache-Control", "private, max-age=3600");
+    return res.send(Buffer.from(buffer));
   } catch (err) {
     console.error("Error serving PDF file:", err);
     if (!res.headersSent) {
