@@ -72,6 +72,17 @@ const kycStorage = isCloudinaryConfigured
     })
   : multer.memoryStorage();
 
+const pdfStorage = isCloudinaryConfigured
+  ? new CloudinaryStorage({
+      cloudinary,
+      params: {
+        folder: "alvarado/pdfs",
+        allowed_formats: ["pdf"],
+        resource_type: "raw",
+      } as any,
+    })
+  : multer.memoryStorage();
+
 export const uploadTeamImage = multer({
   storage: teamStorage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
@@ -104,4 +115,9 @@ export const uploadAttachment = multer({
 export const uploadKYCDocument = multer({
   storage: kycStorage,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+}).single("file");
+
+export const uploadPdf = multer({
+  storage: pdfStorage,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
 }).single("file");

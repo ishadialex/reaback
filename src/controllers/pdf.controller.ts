@@ -2,8 +2,7 @@ import { Request, Response } from "express";
 import { success, error } from "../utils/response.js";
 import { env } from "../config/env.js";
 import { prisma } from "../config/database.js";
-import fs from "fs";
-import path from "path";
+import { cloudinary } from "../config/cloudinary.js";
 import jwt from "jsonwebtoken";
 
 interface VerifyPasscodeRequest {
@@ -13,8 +12,6 @@ interface VerifyPasscodeRequest {
 interface CreatePdfDocumentRequest {
   title: string;
   description?: string;
-  filePath: string;
-  fileUrl: string;
   displayOrder?: number;
   category?: string;
 }
@@ -199,19 +196,21 @@ export async function createPdfDocument(
   res: Response
 ) {
   try {
-    const {
-      title,
-      description = "",
-      filePath,
-      fileUrl,
-      displayOrder = 0,
-      category = "General",
-    } = req.body;
+    const file = (req as any).file;
 
-    // Validate required fields
-    if (!title || !filePath || !fileUrl) {
-      return error(res, "Title, filePath, and fileUrl are required", 400);
+    if (!file) {
+      return error(res, "PDF file is required", 400);
     }
+
+    const { title, description = "", displayOrder = 0, category = "General" } = req.body;
+
+    if (!title) {
+      return error(res, "Title is required", 400);
+    }
+
+    // file.path = Cloudinary secure URL, file.filename = Cloudinary public_id
+    const fileUrl: string = file.path;
+    const filePath: string = file.filename;
 
     const document = await prisma.pdfDocument.create({
       data: {
@@ -219,7 +218,7 @@ export async function createPdfDocument(
         description,
         filePath,
         fileUrl,
-        displayOrder,
+        displayOrder: Number(displayOrder),
         category,
       },
     });
@@ -283,14 +282,24 @@ export async function deletePdfDocument(req: Request, res: Response) {
       return error(res, "PDF document not found", 404);
     }
 
-    // Soft delete by setting isActive to false
+    // Delete from Cloudinary (filePath stores the public_id)
+    if (existing.filePath) {
+      try {
+        await cloudinary.uploader.destroy(existing.filePath, { resource_type: "raw" });
+        console.log(`🗑️ Deleted from Cloudinary: ${existing.filePath}`);
+      } catch (cloudErr) {
+        console.error("Failed to delete from Cloudinary:", cloudErr);
+        // Continue with DB deletion even if Cloudinary fails
+      }
+    }
+
     await prisma.pdfDocument.update({
       where: { id },
       data: { isActive: false },
     });
 
     console.log(`🗑️ Deactivated PDF document: ${existing.title}`);
-    return success(res, null, "PDF document deactivated successfully");
+    return success(res, null, "PDF document deleted successfully");
   } catch (err) {
     console.error("Error deleting PDF document:", err);
     return error(res, "Failed to delete PDF document", 500);
@@ -298,20 +307,18 @@ export async function deletePdfDocument(req: Request, res: Response) {
 }
 
 /**
- * GET /api/pdf/serve/:filename
- * Securely serve PDF file with JWT token verification
+ * GET /api/pdf/serve/:id
+ * Verify JWT then redirect to the Cloudinary PDF URL
  */
 export async function servePdfFile(req: Request, res: Response) {
   try {
-    const filename = Array.isArray(req.params.filename)
-      ? req.params.filename[0]
-      : req.params.filename;
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
 
     // Get token from multiple sources (priority order)
     const token =
-      req.headers.authorization?.replace("Bearer ", "") || // Authorization header
-      (req.query.token as string) || // Query parameter
-      req.cookies?.pdf_access_token; // httpOnly cookie
+      req.headers.authorization?.replace("Bearer ", "") ||
+      (req.query.token as string) ||
+      req.cookies?.pdf_access_token;
 
     if (!token) {
       return res.status(401).json({
@@ -328,12 +335,8 @@ export async function servePdfFile(req: Request, res: Response) {
         granted: number;
       };
 
-      // Verify token purpose
       if (decoded.purpose !== "pdf_access") {
-        return res.status(403).json({
-          success: false,
-          message: "Invalid token purpose",
-        });
+        return res.status(403).json({ success: false, message: "Invalid token purpose" });
       }
     } catch (err) {
       if (err instanceof jwt.TokenExpiredError) {
@@ -342,72 +345,31 @@ export async function servePdfFile(req: Request, res: Response) {
           message: "Access token expired. Please verify passcode again.",
         });
       }
-      return res.status(403).json({
-        success: false,
-        message: "Invalid access token",
-      });
+      return res.status(403).json({ success: false, message: "Invalid access token" });
     }
 
-    // Check if file exists in database
-    const document = await prisma.pdfDocument.findFirst({
-      where: {
-        fileUrl: `/pdfs/${filename}`,
-        isActive: true,
-      },
+    // Validate MongoDB ObjectId format before querying
+    if (!/^[a-f\d]{24}$/i.test(id)) {
+      return res.status(400).json({ success: false, message: "Invalid document ID" });
+    }
+
+    const document = await prisma.pdfDocument.findUnique({
+      where: { id, isActive: true },
     });
 
     if (!document) {
-      return res.status(404).json({
-        success: false,
-        message: "PDF not found",
-      });
+      return res.status(404).json({ success: false, message: "PDF not found" });
     }
-
-    // Construct file path
-    const filePath = path.join(process.cwd(), "public", "pdfs", filename);
-
-    // Check if file exists on filesystem
-    if (!fs.existsSync(filePath)) {
-      console.error(`PDF file not found on filesystem: ${filePath}`);
-      return res.status(404).json({
-        success: false,
-        message: "PDF file not found on server",
-      });
-    }
-
-    // Get file stats for content length
-    const stat = fs.statSync(filePath);
-
-    // Set headers for PDF streaming
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Length", stat.size);
-    res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
-    res.setHeader("Cache-Control", "private, no-cache, no-store, must-revalidate");
-    res.setHeader("Expires", "0");
 
     const grantedTime = new Date(decoded.granted).toISOString();
-    console.log(`✅ Serving PDF: ${filename} (${stat.size} bytes) - Token granted at: ${grantedTime}`);
+    console.log(`✅ Serving PDF: ${document.title} - Token granted at: ${grantedTime}`);
 
-    // Stream the file
-    const fileStream = fs.createReadStream(filePath);
-    fileStream.pipe(res);
-
-    fileStream.on("error", (err) => {
-      console.error("Error streaming PDF:", err);
-      if (!res.headersSent) {
-        res.status(500).json({
-          success: false,
-          message: "Error streaming PDF file",
-        });
-      }
-    });
+    // Redirect to the Cloudinary URL
+    return res.redirect(document.fileUrl);
   } catch (err) {
     console.error("Error serving PDF file:", err);
     if (!res.headersSent) {
-      return res.status(500).json({
-        success: false,
-        message: "Failed to serve PDF file",
-      });
+      return res.status(500).json({ success: false, message: "Failed to serve PDF file" });
     }
   }
 }
