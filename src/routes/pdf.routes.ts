@@ -18,7 +18,9 @@ router.post("/verify-passcode", verifyPasscode);
 router.get("/documents", getPdfDocuments);
 router.get("/documents/:id", getPdfDocument);
 
-// Serve PDF — verifies JWT then redirects to Cloudinary URL
+// Serve PDF — verifies JWT then proxies from Cloudinary
+// Two routes: with and without a friendly filename suffix for browser display
+router.get("/serve/:id/:filename", servePdfFile);
 router.get("/serve/:id", servePdfFile);
 
 // Admin routes (API key OR admin role required)
