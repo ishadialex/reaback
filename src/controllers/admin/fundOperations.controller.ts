@@ -30,7 +30,9 @@ export async function getAllFundOperations(req: Request, res: Response) {
       prisma.fundOperation.count({ where }),
     ]);
 
-    return success(res, { operations, total });
+    const validOperations = operations.filter((op) => op.user !== null);
+
+    return success(res, { operations: validOperations, total });
   } catch (err) {
     console.error("getAllFundOperations error:", err);
     return error(res, "Failed to fetch fund operations", 500);

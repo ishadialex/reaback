@@ -1,3 +1,4 @@
+
 import { Request, Response } from "express";
 import { prisma } from "../../config/database.js";
 import { success, error } from "../../utils/response.js";
@@ -35,6 +36,12 @@ export async function getAllUsers(req: Request, res: Response) {
         isActive: true,
         createdAt: true,
         updatedAt: true,
+        sessions: {
+          where: { isActive: true },
+          select: { createdAt: true, lastActive: true, device: true, location: true },
+          orderBy: { lastActive: "desc" },
+          take: 1,
+        },
       },
       orderBy: { createdAt: "desc" },
       take: parseInt(limit as string),
@@ -43,7 +50,15 @@ export async function getAllUsers(req: Request, res: Response) {
 
     const total = await prisma.user.count({ where });
 
-    return success(res, { users, total, limit: parseInt(limit as string), offset: parseInt(offset as string) });
+    const mapped = users.map(({ sessions, ...u }) => ({
+      ...u,
+      lastLoginAt: sessions[0]?.createdAt ?? null,
+      lastActiveAt: sessions[0]?.lastActive ?? null,
+      lastLoginDevice: sessions[0]?.device ?? null,
+      lastLoginLocation: sessions[0]?.location ?? null,
+    }));
+
+    return success(res, { users: mapped, total, limit: parseInt(limit as string), offset: parseInt(offset as string) });
   } catch (err) {
     console.error("Get users error:", err);
     return error(res, "Failed to fetch users", 500);
@@ -81,6 +96,11 @@ export async function getUser(req: Request, res: Response) {
         isActive: true,
         createdAt: true,
         updatedAt: true,
+        sessions: {
+          select: { createdAt: true, lastActive: true, device: true, browser: true, os: true, location: true, ipAddress: true },
+          orderBy: { lastActive: "desc" },
+          take: 3,
+        },
         _count: {
           select: {
             transactions: true,
@@ -96,7 +116,26 @@ export async function getUser(req: Request, res: Response) {
       return error(res, "User not found", 404);
     }
 
-    return success(res, user);
+    const { sessions, ...rest } = user;
+    return success(res, {
+      ...rest,
+      lastLoginAt: sessions[0]?.createdAt ?? null,
+      lastActiveAt: sessions[0]?.lastActive ?? null,
+      lastLoginDevice: sessions[0]?.device ?? null,
+      lastLoginBrowser: sessions[0]?.browser ?? null,
+      lastLoginOs: sessions[0]?.os ?? null,
+      lastLoginLocation: sessions[0]?.location ?? null,
+      lastLoginIp: sessions[0]?.ipAddress ?? null,
+      recentSessions: sessions.map((s) => ({
+        loginAt: s.createdAt,
+        lastActive: s.lastActive,
+        device: s.device,
+        browser: s.browser,
+        os: s.os,
+        location: s.location,
+        ipAddress: s.ipAddress,
+      })),
+    });
   } catch (err) {
     console.error("Get user error:", err);
     return error(res, "Failed to fetch user", 500);

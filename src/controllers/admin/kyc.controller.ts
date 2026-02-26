@@ -44,8 +44,10 @@ export async function getAllKYCSubmissions(req: Request, res: Response) {
       take: limitNum,
     });
 
+    const validSubmissions = submissions.filter((s) => s.user !== null);
+
     return success(res, {
-      submissions,
+      submissions: validSubmissions,
       pagination: {
         total,
         page: pageNum,

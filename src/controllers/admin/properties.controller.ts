@@ -4,6 +4,33 @@ import { success, error } from "../../utils/response.js";
 import { cloudinary } from "../../config/cloudinary.js";
 
 /**
+ * Bypass Prisma's aggregation pipeline limit for Property updates.
+ *
+ * Prisma MongoDB generates one pipeline stage per model field when a model uses @updatedAt.
+ * The Property model has ~100 fields — exceeding MongoDB Atlas's 50-stage limit.
+ * This helper uses a raw $set + $currentDate command which has no pipeline limit.
+ */
+async function rawPropertySet(id: string, setData: Record<string, unknown>) {
+  // Strip any undefined values and keep only JSON-serialisable values
+  const payload: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(setData)) {
+    if (v !== undefined) payload[k] = v;
+  }
+
+  await (prisma.$runCommandRaw as any)({
+    update: "Property",
+    updates: [
+      {
+        q: { _id: { $oid: id } },
+        u: { $set: payload, $currentDate: { updatedAt: true } },
+      },
+    ],
+  });
+
+  return prisma.property.findUnique({ where: { id } });
+}
+
+/**
  * Validate investmentType and category combination.
  *   pooled     → airbnb_arbitrage | airbnb_mortgage
  *   individual → airbnb_arbitrage | airbnb_mortgage | for_sale
@@ -316,6 +343,28 @@ export async function update(req: Request, res: Response) {
 
     const data = parsePropertyBody(req.body);
 
+    // Handle file uploads before the empty-check so image-only PATCHes are allowed
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+
+    // Append new property images to existing ones (don't replace)
+    if (files?.images && files.images.length > 0) {
+      if (files.images.length > 20) {
+        return error(res, "Maximum 20 property images allowed", 400);
+      }
+      // Cloudinary returns URLs in file.path — merge with current images
+      const newUrls = files.images.map((f: Express.Multer.File) => f.path);
+      data.images = [...(existing.images ?? []), ...newUrls];
+    }
+
+    // If new manager photo uploaded, use it
+    if (files?.managerPhoto?.[0]) {
+      data.managerPhoto = files.managerPhoto[0].path;
+    }
+
+    if (Object.keys(data).length === 0) {
+      return error(res, "No fields provided to update", 400);
+    }
+
     // Auto-compute expectedROI from monthlyReturn * duration (use existing values as fallback)
     if (data.monthlyReturn !== undefined || data.duration !== undefined) {
       const monthlyReturn = data.monthlyReturn ?? existing.monthlyReturn;
@@ -331,27 +380,7 @@ export async function update(req: Request, res: Response) {
       return error(res, validationError, 400);
     }
 
-    // Handle file uploads
-    const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
-
-    // If new property images uploaded, use them; otherwise keep existing
-    if (files?.images && files.images.length > 0) {
-      if (files.images.length > 20) {
-        return error(res, "Maximum 20 property images allowed", 400);
-      }
-      // Cloudinary returns URLs in file.path
-      data.images = files.images.map((f) => f.path);
-    }
-
-    // If new manager photo uploaded, use it
-    if (files?.managerPhoto?.[0]) {
-      data.managerPhoto = files.managerPhoto[0].path;
-    }
-
-    const property = await prisma.property.update({
-      where: { id },
-      data,
-    });
+    const property = await rawPropertySet(id, data);
 
     return success(res, property, "Property updated successfully");
   } catch (err) {
@@ -370,10 +399,7 @@ export async function remove(req: Request, res: Response) {
     }
 
     // Soft delete by setting isActive to false
-    const property = await prisma.property.update({
-      where: { id },
-      data: { isActive: false },
-    });
+    const property = await rawPropertySet(id, { isActive: false });
 
     return success(res, property, "Property deleted successfully");
   } catch (err) {
@@ -443,12 +469,9 @@ export async function removeImage(req: Request, res: Response) {
     }
 
     const updatedImages = existing.images.filter((img) => img !== url);
-    const property = await prisma.property.update({
-      where: { id },
-      data: { images: updatedImages },
-    });
+    const property = await rawPropertySet(id, { images: updatedImages });
 
-    return success(res, { images: property.images }, "Image removed successfully");
+    return success(res, { images: property?.images ?? updatedImages }, "Image removed successfully");
   } catch (err) {
     console.error("Remove image error:", err);
     return error(res, "Failed to remove image", 500);

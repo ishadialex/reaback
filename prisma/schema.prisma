@@ -117,7 +117,7 @@ model User {
 model Account {
   id            String    @id @default(auto()) @map("_id") @db.ObjectId
   userId        String    @db.ObjectId
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   provider      String    // "credentials" | "google"
   providerId    String?   // OAuth provider's unique ID (e.g., Google's "sub" claim)
@@ -141,7 +141,7 @@ model Account {
 model Session {
   id             String    @id @default(auto()) @map("_id") @db.ObjectId
   userId         String    @db.ObjectId
-  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user           User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
   token          String    @unique
   previousToken  String?
   tokenRotatedAt DateTime?
@@ -184,7 +184,7 @@ model OAuthToken {
   id           String   @id @default(auto()) @map("_id") @db.ObjectId
   token        String   @unique
   userId       String   @db.ObjectId
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   accessToken  String
   refreshToken String
   expiresAt    DateTime
@@ -199,7 +199,7 @@ model OAuthToken {
 model UserSettings {
   id                 String  @id @default(auto()) @map("_id") @db.ObjectId
   userId             String  @unique @db.ObjectId
-  user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user               User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
   emailNotifications Boolean @default(true)
   pushNotifications  Boolean @default(true)
   marketingEmails    Boolean @default(false)
@@ -216,7 +216,7 @@ model UserSettings {
 model SupportTicket {
   id        String          @id @default(auto()) @map("_id") @db.ObjectId
   userId    String          @db.ObjectId
-  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
   subject   String
   category  String
   priority  String          @default("medium") // low | medium | high | urgent
@@ -231,7 +231,7 @@ model TicketMessage {
   ticketId    String           @db.ObjectId
   ticket      SupportTicket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   senderId    String           @db.ObjectId
-  sender      User             @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  sender      User?            @relation(fields: [senderId], references: [id], onDelete: Cascade)
   senderType  String           @default("user") // user | admin
   message     String
   createdAt   DateTime         @default(now())
@@ -243,7 +243,7 @@ model FileAttachment {
   messageId String?        @db.ObjectId
   message   TicketMessage? @relation(fields: [messageId], references: [id], onDelete: Cascade)
   userId    String         @db.ObjectId
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String
   size      Int
   type      String
@@ -259,7 +259,7 @@ model FileAttachment {
 model Transfer {
   id             String    @id @default(auto()) @map("_id") @db.ObjectId
   senderId       String    @db.ObjectId
-  sender         User      @relation("SentTransfers", fields: [senderId], references: [id], onDelete: Cascade)
+  sender         User?     @relation("SentTransfers", fields: [senderId], references: [id], onDelete: Cascade)
   recipientId    String?   @db.ObjectId
   recipient      User?     @relation("ReceivedTransfers", fields: [recipientId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   recipientEmail String
@@ -273,7 +273,7 @@ model Transfer {
 model Transaction {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
   userId      String   @db.ObjectId
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   type        String   // deposit | withdrawal | transfer_sent | transfer_received | investment
   amount      Float
   status      String   @default("pending") // pending | completed | failed
@@ -289,7 +289,7 @@ model Transaction {
 model UserInvestment {
   id                 String            @id @default(auto()) @map("_id") @db.ObjectId
   userId             String            @db.ObjectId
-  user               User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user               User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
   investmentOptionId String?           @db.ObjectId
   investmentOption   InvestmentOption? @relation(fields: [investmentOptionId], references: [id])
   propertyId         String?           @db.ObjectId
@@ -452,7 +452,7 @@ model PropertyReview {
 model Notification {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   userId    String   @db.ObjectId
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   type      String   // system | transfer | investment | security | support
   title     String
   message   String
@@ -467,9 +467,9 @@ model Notification {
 model Referral {
   id             String   @id @default(auto()) @map("_id") @db.ObjectId
   referrerId     String   @db.ObjectId
-  referrer       User     @relation("ReferralsMade", fields: [referrerId], references: [id], onDelete: Cascade)
+  referrer       User?    @relation("ReferralsMade", fields: [referrerId], references: [id], onDelete: Cascade)
   referredUserId String   @db.ObjectId
-  referredUser   User     @relation("ReferralsReceived", fields: [referredUserId], references: [id], onDelete: Cascade)
+  referredUser   User?    @relation("ReferralsReceived", fields: [referredUserId], references: [id], onDelete: Cascade)
   status         String   @default("pending") // pending | completed
   reward         Float    @default(0)
   createdAt      DateTime @default(now())
@@ -482,7 +482,7 @@ model Referral {
 model FundOperation {
   id          String    @id @default(auto()) @map("_id") @db.ObjectId
   userId      String    @db.ObjectId
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
   type        String    // deposit | withdrawal
   method      String    // card | bank | crypto
   amount      Float
@@ -561,7 +561,7 @@ model NewsletterSubscriber {
 model KYC {
   id                 String    @id @default(auto()) @map("_id") @db.ObjectId
   userId             String    @unique @db.ObjectId
-  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user               User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
   status             String    @default("not_submitted") // not_submitted | pending | approved | rejected
   fullName           String    @default("")
   dateOfBirth        String    @default("")

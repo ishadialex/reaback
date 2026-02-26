@@ -7,15 +7,25 @@ const router = Router();
 
 router.use(adminAuthFlexible);
 
-// Wrap multer to catch Cloudinary upload errors
+// Wrap multer to catch Cloudinary upload errors.
+// Skip multer entirely for non-multipart requests (e.g. JSON PATCH for field-only updates).
 function handleUpload(req: Request, res: Response, next: NextFunction) {
+  const contentType = req.headers["content-type"] || "";
+  if (!contentType.startsWith("multipart/form-data")) {
+    return next();
+  }
   uploadPropertyWithManager(req, res, (err: any) => {
     if (err) {
+      // ECONNRESET / aborted = client disconnected; nothing to respond to
+      if (err.code === "ECONNRESET" || err.message === "aborted") return;
       console.error("Image upload error:", err);
-      return res.status(400).json({
-        success: false,
-        message: err.message || "Image upload failed",
-      });
+      if (!res.headersSent) {
+        return res.status(400).json({
+          success: false,
+          message: err.message || "Image upload failed",
+        });
+      }
+      return;
     }
     next();
   });
