@@ -44,15 +44,25 @@ export async function sendDocument(req: Request, res: Response) {
       return error(res, "PDF file is required", 400);
     }
 
-    const { userId, title, description = "", userMessage = "" } = req.body as {
+    const { userId, title, description = "", userMessage = "", fields: fieldsRaw = "[]" } = req.body as {
       userId: string;
       title: string;
       description?: string;
       userMessage?: string;
+      fields?: string;
     };
 
     if (!userId || !title) {
       return error(res, "userId and title are required", 400);
+    }
+
+    // Parse and validate the fields JSON array
+    let fields: unknown[] = [];
+    try {
+      const parsed = JSON.parse(fieldsRaw);
+      if (Array.isArray(parsed)) fields = parsed;
+    } catch {
+      return error(res, "Invalid fields JSON", 400);
     }
 
     // Verify user exists and get contact details for notification
@@ -75,6 +85,7 @@ export async function sendDocument(req: Request, res: Response) {
         userMessage,
         documentUrl,
         status: "pending",
+        fields: fields as any,
       },
       include: {
         user: {

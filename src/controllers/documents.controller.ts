@@ -55,6 +55,7 @@ export async function getUserDocuments(req: Request, res: Response) {
         status: true,
         signedAt: true,
         createdAt: true,
+        fields: true,
       },
     });
 
@@ -238,19 +239,15 @@ export async function signDocument(req: Request, res: Response) {
   try {
     const userId = req.userId!;
     const id = String(req.params.id);
+
+    // Guided mode uses fieldValues[]; legacy mode uses flat signature fields
     const {
       signatureDataUrl,
-      sigPos,
-      sigScale = 1,
-      nameText,
-      namePos,
-      dateText,
-      datePos,
-      canvasW,
-      sigDisplayW,
-      sigDisplayH,
+      sigPos, sigScale = 1, nameText, namePos, dateText, datePos,
+      canvasW, sigDisplayW, sigDisplayH,
+      fieldValues,
     } = req.body as {
-      signatureDataUrl: string;
+      signatureDataUrl?: string;
       sigPos?: { xPct: number; yPct: number };
       sigScale?: number;
       nameText?: string | null;
@@ -260,108 +257,126 @@ export async function signDocument(req: Request, res: Response) {
       canvasW?: number;
       sigDisplayW?: number;
       sigDisplayH?: number;
+      fieldValues?: Array<{ fieldId: string; value: string; sigW?: number; sigH?: number; canvasW?: number }>;
     };
-
-    if (!signatureDataUrl) {
-      return error(res, "Signature is required", 400);
-    }
-
-    // Validate it's a base64 PNG
-    if (!signatureDataUrl.startsWith("data:image/png;base64,")) {
-      return error(res, "Signature must be a PNG data URL", 400);
-    }
 
     const doc = await prisma.documentSigningRequest.findUnique({ where: { id } });
     if (!doc) return error(res, "Document not found", 404);
     if (doc.userId !== userId) return error(res, "Unauthorized", 403);
     if (doc.status !== "pending") return error(res, "Document is not pending", 400);
 
-    // Fetch original PDF bytes from Cloudinary (use signed URL — raw resources require auth delivery)
-    const pdfResponse = await fetch(signedCloudinaryUrl(doc.documentUrl));
-    if (!pdfResponse.ok) {
-      return error(res, "Failed to fetch original document", 502);
+    const docFields = Array.isArray(doc.fields) ? (doc.fields as any[]) : [];
+    const isGuidedMode = docFields.length > 0;
+
+    if (isGuidedMode) {
+      // Validate all required user-assigned fields are present
+      const fvMap = new Map((fieldValues ?? []).map((fv) => [fv.fieldId, fv]));
+      for (const f of docFields) {
+        if (f.assignedTo === "user" && f.required && !fvMap.get(f.id)?.value) {
+          return error(res, `Required field "${f.label || f.type}" is not filled`, 400);
+        }
+      }
+    } else {
+      // Legacy: top-level signature required
+      if (!signatureDataUrl) return error(res, "Signature is required", 400);
+      if (!signatureDataUrl.startsWith("data:image/png;base64,")) {
+        return error(res, "Signature must be a PNG data URL", 400);
+      }
     }
+
+    // Fetch original PDF bytes from Cloudinary
+    const pdfResponse = await fetch(signedCloudinaryUrl(doc.documentUrl));
+    if (!pdfResponse.ok) return error(res, "Failed to fetch original document", 502);
     const pdfBytes = Buffer.from(await pdfResponse.arrayBuffer());
 
-    // Convert base64 PNG to Buffer
-    const base64Data = signatureDataUrl.replace("data:image/png;base64,", "");
-    const sigBuffer = Buffer.from(base64Data, "base64");
-
-    // Use pdf-lib to stamp signature and optional name/date on last page
     console.log("signDocument: loading PDF bytes, length=", pdfBytes.length);
     const pdfDoc = await PDFDocument.load(pdfBytes);
-    console.log("signDocument: embedding signature PNG, length=", sigBuffer.length);
-    const sigImage = await pdfDoc.embedPng(sigBuffer);
-    const pages = pdfDoc.getPages();
+    const pages  = pdfDoc.getPages();
     const lastPage = pages[pages.length - 1];
     const { width: pdfW, height: pdfH } = lastPage.getSize();
 
-    // Size: use the canvas display proportions sent from the frontend so the
-    // final PDF exactly matches what the user saw on the positioning canvas.
-    // Fall back to image-based sizing for old clients that don't send these fields.
-    let sigWidth: number;
-    let sigHeight: number;
-    if (canvasW && sigDisplayW && sigDisplayH) {
-      const scaleRatio = pdfW / canvasW;
-      sigWidth  = sigDisplayW * (sigScale ?? 1) * scaleRatio;
-      sigHeight = sigDisplayH * (sigScale ?? 1) * scaleRatio;
+    if (isGuidedMode) {
+      // ── Guided mode: render each user field at admin-defined position ────
+      const fvMap = new Map((fieldValues ?? []).map((fv) => [fv.fieldId, fv]));
+      const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      let font: any = null;
+
+      for (const field of docFields) {
+        if (field.assignedTo !== "user") continue;
+        const fv = fvMap.get(field.id);
+        if (!fv?.value) continue;
+
+        const fx = field.xPct * pdfW;
+        const fw = field.wPct * pdfW;
+        const fh = field.hPct * pdfH;
+        const fy = Math.max(0, pdfH * (1 - field.yPct) - fh);
+
+        try {
+          if (field.type === "signature") {
+            const b64 = fv.value.replace("data:image/png;base64,", "");
+            const img = await pdfDoc.embedPng(Buffer.from(b64, "base64"));
+            lastPage.drawImage(img, { x: Math.max(0, fx), y: fy, width: fw, height: fh });
+          } else {
+            if (!font) font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+            const textY = Math.max(0, pdfH * (1 - field.yPct) - fh * 0.7);
+            let text = fv.value.trim();
+            if (field.type === "date") {
+              const d = new Date(text + "T00:00:00");
+              text = `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+            }
+            lastPage.drawText(text, { x: Math.max(0, fx), y: textY, size: 10, font, color: rgb(0, 0, 0) });
+          }
+        } catch (e) {
+          console.error(`signDocument: field ${field.id} draw failed (non-fatal):`, e);
+        }
+      }
     } else {
-      const intrinsic = sigImage.scale(1);
-      sigWidth  = Math.min(220, pdfW * 0.32) * (sigScale ?? 1);
-      sigHeight = intrinsic.width > 0
-        ? (intrinsic.height / intrinsic.width) * sigWidth
-        : sigWidth * 0.4;
-    }
+      // ── Legacy mode: free-placement signature + optional name/date ───────
+      const base64Data = signatureDataUrl!.replace("data:image/png;base64,", "");
+      const sigBuffer  = Buffer.from(base64Data, "base64");
+      console.log("signDocument: embedding signature PNG, length=", sigBuffer.length);
+      const sigImage = await pdfDoc.embedPng(sigBuffer);
 
-    // Position: convert top-left-origin screen fractions to bottom-left-origin PDF coords
-    // Default falls back to bottom-right corner if no position was sent
-    const sigX = sigPos
-      ? Math.max(0, sigPos.xPct * pdfW)
-      : pdfW - sigWidth - 30;
-    const sigY = sigPos
-      ? Math.max(0, pdfH * (1 - sigPos.yPct) - sigHeight)
-      : 30;
+      let sigWidth: number, sigHeight: number;
+      if (canvasW && sigDisplayW && sigDisplayH) {
+        const scaleRatio = pdfW / canvasW;
+        sigWidth  = sigDisplayW * (sigScale ?? 1) * scaleRatio;
+        sigHeight = sigDisplayH * (sigScale ?? 1) * scaleRatio;
+      } else {
+        const intrinsic = sigImage.scale(1);
+        sigWidth  = Math.min(220, pdfW * 0.32) * (sigScale ?? 1);
+        sigHeight = intrinsic.width > 0 ? (intrinsic.height / intrinsic.width) * sigWidth : sigWidth * 0.4;
+      }
 
-    lastPage.drawImage(sigImage, {
-      x: sigX,
-      y: sigY,
-      width: sigWidth,
-      height: sigHeight,
-    });
+      const sigX = sigPos ? Math.max(0, sigPos.xPct * pdfW) : pdfW - sigWidth - 30;
+      const sigY = sigPos ? Math.max(0, pdfH * (1 - sigPos.yPct) - sigHeight) : 30;
+      lastPage.drawImage(sigImage, { x: sigX, y: sigY, width: sigWidth, height: sigHeight });
 
-    // Draw name and date text if provided — wrapped so a font error never breaks signing
-    if ((nameText && nameText.trim()) || dateText) {
-      try {
-        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-        // TEXT_BOX_H=26px on canvas; baseline sits ~70% down the box → offset = 18 * scaleRatio
-        const textScaleRatio = canvasW ? pdfW / canvasW : 1;
-        const textYOffset = 18 * textScaleRatio;
+      if ((nameText && nameText.trim()) || dateText) {
+        try {
+          const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+          const textScaleRatio = canvasW ? pdfW / canvasW : 1;
+          const textYOffset = 18 * textScaleRatio;
 
-        if (nameText && nameText.trim() && namePos) {
-          lastPage.drawText(nameText.trim(), {
-            x: Math.max(0, namePos.xPct * pdfW),
-            y: Math.max(0, pdfH * (1 - namePos.yPct) - textYOffset),
-            size: 10,
-            font,
-            color: rgb(0, 0, 0),
-          });
+          if (nameText && nameText.trim() && namePos) {
+            lastPage.drawText(nameText.trim(), {
+              x: Math.max(0, namePos.xPct * pdfW),
+              y: Math.max(0, pdfH * (1 - namePos.yPct) - textYOffset),
+              size: 10, font, color: rgb(0, 0, 0),
+            });
+          }
+          if (dateText && datePos) {
+            const d = new Date(dateText + "T00:00:00");
+            const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+            lastPage.drawText(`${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`, {
+              x: Math.max(0, datePos.xPct * pdfW),
+              y: Math.max(0, pdfH * (1 - datePos.yPct) - textYOffset),
+              size: 10, font, color: rgb(0, 0, 0),
+            });
+          }
+        } catch (fontErr) {
+          console.error("signDocument: text drawing failed (non-fatal):", fontErr);
         }
-
-        if (dateText && datePos) {
-          // Locale-safe date format — avoids ICU availability issues in some Node builds
-          const d = new Date(dateText + "T00:00:00");
-          const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-          const formatted = `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
-          lastPage.drawText(formatted, {
-            x: Math.max(0, datePos.xPct * pdfW),
-            y: Math.max(0, pdfH * (1 - datePos.yPct) - textYOffset),
-            size: 10,
-            font,
-            color: rgb(0, 0, 0),
-          });
-        }
-      } catch (fontErr) {
-        console.error("signDocument: text drawing failed (non-fatal):", fontErr);
       }
     }
 
@@ -386,13 +401,21 @@ export async function signDocument(req: Request, res: Response) {
 
     const signedDocumentUrl = uploadResult.secure_url;
 
+    // For guided mode, store the first signature field value as the signature image
+    const storedSigImageUrl = isGuidedMode
+      ? (fieldValues ?? []).find((fv) => {
+          const f = (doc.fields as any[]).find((df: any) => df.id === fv.fieldId);
+          return f?.type === "signature";
+        })?.value ?? null
+      : signatureDataUrl;
+
     // Update record
     const updated = await prisma.documentSigningRequest.update({
       where: { id },
       data: {
         status: "signed",
         signedDocumentUrl,
-        signatureImageUrl: signatureDataUrl,
+        signatureImageUrl: storedSigImageUrl,
         signedAt: new Date(),
       },
       select: {

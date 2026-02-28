@@ -553,6 +553,7 @@ model DocumentSigningRequest {
   signatureImageUrl String?
   status            String    @default("pending") // pending | signed | rejected
   adminNotes        String    @default("")
+  fields            Json      @default("[]")      // DocField[] — admin-defined field zones
   signedAt          DateTime?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
