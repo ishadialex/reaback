@@ -7,6 +7,7 @@ import {
   notifyAdminNewTicket,
   notifyAdminTicketReply,
 } from "../services/notification.service.js";
+import { emitToTicketRoom } from "../services/socket.service.js";
 
 const BASE_URL = env.APP_URL || `http://localhost:${env.PORT}`;
 
@@ -196,7 +197,7 @@ export async function getTicket(req: Request, res: Response) {
         authorName:
           msg.senderType === "admin"
             ? "Support Team"
-            : `${msg.sender.firstName} ${msg.sender.lastName}`,
+            : `${msg.sender?.firstName} ${msg.sender?.lastName}`,
         createdAt: msg.createdAt,
         attachments: msg.attachments.map(formatAttachment),
       })),
@@ -299,19 +300,19 @@ export async function replyTicket(req: Request, res: Response) {
       `Your reply to "${ticket.subject}" has been sent.`
     ).catch(() => {});
 
-    return success(
-      res,
-      {
-        id: ticketMessage.id,
-        message: ticketMessage.message,
-        isStaff: false,
-        authorName,
-        createdAt: ticketMessage.createdAt,
-        attachments: attachments.map(formatAttachment),
-      },
-      "Reply sent",
-      201
-    );
+    const replyPayload = {
+      id: ticketMessage.id,
+      message: ticketMessage.message,
+      isStaff: false,
+      authorName,
+      createdAt: ticketMessage.createdAt,
+      attachments: attachments.map(formatAttachment),
+    };
+
+    // Real-time: push new reply to everyone viewing this ticket (admin panel)
+    emitToTicketRoom(id, "support_new_reply", { ticketId: id, reply: replyPayload });
+
+    return success(res, replyPayload, "Reply sent", 201);
   } catch (err) {
     return error(res, "Failed to send reply", 500);
   }

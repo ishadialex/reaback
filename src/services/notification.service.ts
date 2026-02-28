@@ -1076,3 +1076,72 @@ export async function notifyAdminKYCSubmission(
     console.error("Error sending admin KYC submission notification:", error);
   }
 }
+
+/**
+ * Notify user when admin sends them a document to review and sign
+ */
+export async function sendDocumentForSigningNotification(
+  userId: string,
+  userEmail: string,
+  userName: string,
+  documentTitle: string,
+  userMessage: string
+): Promise<void> {
+  try {
+    const dashboardUrl = `${emailConfig.appUrl}/dashboard/documents`;
+
+    // ── Email ────────────────────────────────────────────────────────────────
+    const body = `
+      ${badge("Action Required", "#dc2626")}
+      <br><br>
+      ${sectionHeading("Document Ready for Your Signature")}
+      ${paragraph(`Hello <strong>${userName}</strong>,`)}
+      ${paragraph(`${emailConfig.appName} has sent you a document that requires your review and electronic signature.`)}
+      ${infoBox(`
+        <p style="margin:0 0 8px; font-size:14px; font-weight:600; color:#374151;">Document Details</p>
+        ${detailRow("Document", documentTitle)}
+        ${detailRow("Sent", new Date().toLocaleString())}
+      `)}
+      ${userMessage ? warningBox(`
+        <p style="margin:0 0 6px; font-size:14px; font-weight:600; color:#92400e;">Message from ${emailConfig.appName}:</p>
+        <p style="margin:0; font-size:14px; color:#92400e; white-space:pre-wrap;">${userMessage}</p>
+      `) : ""}
+      ${paragraph("Please log in to your dashboard and navigate to the <strong>Documents</strong> section to review and sign the document at your earliest convenience.")}
+      ${ctaButton("Review &amp; Sign Document", dashboardUrl)}
+      ${paragraph(`If you have any questions about this document, please contact our support team.`)}
+      <p style="margin:20px 0 0; font-size:14px; color:#9ca3af;">Regards,<br><strong style="color:#374151;">${emailConfig.appName} Team</strong></p>
+    `;
+
+    await sendEmailNotification(
+      userId,
+      {
+        to: userEmail,
+        subject: `Action Required: Document awaiting your signature — ${emailConfig.appName}`,
+        html: emailWrapper({
+          preheader: `You have a new document "${documentTitle}" waiting for your signature.`,
+          body,
+        }),
+        text: `Hello ${userName},\n\n${emailConfig.appName} has sent you a document that requires your review and signature.\n\nDocument: ${documentTitle}\n${userMessage ? `\nMessage from ${emailConfig.appName}:\n${userMessage}\n` : ""}\nLog in to review and sign:\n${dashboardUrl}\n\nRegards,\n${emailConfig.appName} Team`,
+      },
+      NotificationType.EMAIL
+    );
+
+    // ── In-app notification + socket push ────────────────────────────────────
+    await createInAppNotification(
+      userId,
+      "document",
+      "Document requires your signature",
+      `"${documentTitle}" has been sent to you for review and signature. Visit your Documents dashboard to sign.`
+    );
+
+    emitToUser(userId, "document_for_signing", {
+      documentTitle,
+      dashboardUrl,
+      timestamp: new Date().toISOString(),
+    });
+
+    console.log(`✅ Document-for-signing notification sent to ${userEmail} (doc: "${documentTitle}")`);
+  } catch (error) {
+    console.error("Error sending document-for-signing notification:", error);
+  }
+}

@@ -595,7 +595,7 @@ export async function verify2FALogin(req: Request, res: Response) {
         },
       });
 
-      if (!oAuthTokenRecord) {
+      if (!oAuthTokenRecord || !oAuthTokenRecord.user) {
         return error(res, "Invalid or expired OAuth token", 401);
       }
 
@@ -634,11 +634,12 @@ export async function verify2FALogin(req: Request, res: Response) {
         },
       });
 
+      const tokenUser = oAuthTokenRecord.user;
       if (session) {
         setImmediate(() => {
           sendLoginAlert(
-            oAuthTokenRecord.user.id,
-            oAuthTokenRecord.user.email,
+            tokenUser.id,
+            tokenUser.email,
             session.device,
             session.browser,
             session.location,
@@ -650,9 +651,9 @@ export async function verify2FALogin(req: Request, res: Response) {
 
         setImmediate(() => {
           notifyAdminUserSignin(
-            `${oAuthTokenRecord.user.firstName} ${oAuthTokenRecord.user.lastName}`,
-            oAuthTokenRecord.user.email,
-            oAuthTokenRecord.user.id,
+            `${tokenUser.firstName} ${tokenUser.lastName}`,
+            tokenUser.email,
+            tokenUser.id,
             session.device,
             session.browser,
             session.location,
@@ -1504,7 +1505,7 @@ export async function exchangeOAuthToken(req: Request, res: Response) {
       },
     });
 
-    if (!oAuthToken) {
+    if (!oAuthToken || !oAuthToken.user) {
       return error(res, "Invalid or expired token", 401);
     }
 
@@ -1586,18 +1587,19 @@ export async function exchangeOAuthToken(req: Request, res: Response) {
         },
       });
 
+      const oauthTokenUser = oAuthToken.user;
       // Send login alert for force login
       setImmediate(() => {
-        sendLoginAlert(oAuthToken.user.id, oAuthToken.user.email, device, browser, location, ipAddress).catch((err) => {
+        sendLoginAlert(oauthTokenUser.id, oauthTokenUser.email, device, browser, location, ipAddress).catch((err) => {
           console.error('❌ Login alert email failed:', err?.message || err);
         });
       });
 
       setImmediate(() => {
         notifyAdminUserSignin(
-          `${oAuthToken.user.firstName} ${oAuthToken.user.lastName}`,
-          oAuthToken.user.email,
-          oAuthToken.user.id,
+          `${oauthTokenUser.firstName} ${oauthTokenUser.lastName}`,
+          oauthTokenUser.email,
+          oauthTokenUser.id,
           device,
           browser,
           location,

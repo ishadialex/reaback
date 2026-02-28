@@ -8,6 +8,10 @@ const userSockets = new Map<string, Set<string>>();
 
 let io: SocketServer | null = null;
 
+export function getIO(): SocketServer | null {
+  return io;
+}
+
 export function initSocket(httpServer: HttpServer): SocketServer {
   io = new SocketServer(httpServer, {
     cors: {
@@ -57,6 +61,15 @@ export function initSocket(httpServer: HttpServer): SocketServer {
 
     console.log(`🔌 Socket connected: user ${userId} (socket ${socket.id})`);
 
+    // Support ticket rooms: join/leave so both user and admin get live updates
+    socket.on("join_ticket", (ticketId: string) => {
+      if (ticketId) socket.join(`ticket:${ticketId}`);
+    });
+
+    socket.on("leave_ticket", (ticketId: string) => {
+      if (ticketId) socket.leave(`ticket:${ticketId}`);
+    });
+
     socket.on("disconnect", () => {
       const sockets = userSockets.get(userId);
       if (sockets) {
@@ -70,6 +83,14 @@ export function initSocket(httpServer: HttpServer): SocketServer {
   });
 
   return io;
+}
+
+/**
+ * Emit an event to everyone in a ticket room (both user and admin viewing the ticket)
+ */
+export function emitToTicketRoom(ticketId: string, event: string, data: unknown): void {
+  if (!io) return;
+  io.to(`ticket:${ticketId}`).emit(event, data);
 }
 
 /**

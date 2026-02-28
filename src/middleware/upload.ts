@@ -83,6 +83,16 @@ const pdfStorage = isCloudinaryConfigured
     })
   : multer.memoryStorage();
 
+const signingDocStorage = isCloudinaryConfigured
+  ? new CloudinaryStorage({
+      cloudinary,
+      params: {
+        folder: "alvarado/signing-documents",
+        resource_type: "auto",
+      } as any,
+    })
+  : multer.memoryStorage();
+
 export const uploadTeamImage = multer({
   storage: teamStorage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
@@ -119,5 +129,10 @@ export const uploadKYCDocument = multer({
 
 export const uploadPdf = multer({
   storage: pdfStorage,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+}).single("file");
+
+export const uploadSigningDocument = multer({
+  storage: signingDocStorage,
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
 }).single("file");

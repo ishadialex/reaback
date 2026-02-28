@@ -102,8 +102,8 @@ export async function getList(req: Request, res: Response) {
     // Format the response
     const formattedReferrals = referrals.map((ref) => ({
       id: ref.id,
-      name: `${ref.referredUser.firstName} ${ref.referredUser.lastName}`,
-      email: ref.referredUser.email,
+      name: `${ref.referredUser?.firstName} ${ref.referredUser?.lastName}`,
+      email: ref.referredUser?.email ?? "",
       status: ref.status,
       reward: ref.reward,
       joinedAt: ref.createdAt,

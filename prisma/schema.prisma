@@ -111,6 +111,7 @@ model User {
   fundOperations  FundOperation[]
   propertyReviews PropertyReview[]
   kyc             KYC?
+  documentSigningRequests DocumentSigningRequest[]
 
 }
 
@@ -534,6 +535,30 @@ model PdfDocument {
 
   @@index([isActive, displayOrder])
   @@index([category, displayOrder])
+}
+
+// ──────────────────────────────────────────────
+// Document Signing Requests
+// ──────────────────────────────────────────────
+
+model DocumentSigningRequest {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId            String    @db.ObjectId
+  user              User      @relation(fields: [userId], references: [id])
+  title             String
+  description       String    @default("")
+  userMessage       String    @default("")
+  documentUrl       String
+  signedDocumentUrl String?
+  signatureImageUrl String?
+  status            String    @default("pending") // pending | signed | rejected
+  adminNotes        String    @default("")
+  signedAt          DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([userId, status])
+  @@index([status, createdAt])
 }
 
 // ──────────────────────────────────────────────

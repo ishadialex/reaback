@@ -29,6 +29,10 @@ import adminPropertiesRoutes from "./admin/properties.routes.js";
 import adminUsersRoutes from "./admin/users.routes.js";
 import adminKycRoutes from "./admin/kyc.routes.js";
 import adminFundOperationsRoutes from "./admin/fundOperations.routes.js";
+import adminPaymentWalletsRoutes from "./admin/paymentWallets.routes.js";
+import adminDocumentsRoutes from "./admin/documents.routes.js";
+import adminSupportRoutes from "./admin/support.routes.js";
+import documentsRoutes from "./documents.routes.js";
 import kycRoutes from "./kyc.routes.js";
 
 const router = Router();
@@ -64,6 +68,7 @@ router.use("/fund", fundRoutes);
 router.use("/payment-methods", paymentMethodsRoutes);
 router.use("/fund-operations", fundOperationsRoutes);
 router.use("/reviews", reviewsRoutes);
+router.use("/documents", documentsRoutes);
 
 // Admin routes (API key OR admin role required)
 router.use("/admin/team", adminTeamRoutes);
@@ -73,5 +78,8 @@ router.use("/admin/properties", adminPropertiesRoutes);
 router.use("/admin/users", adminUsersRoutes);
 router.use("/admin/kyc", adminKycRoutes);
 router.use("/admin/fund-operations", adminFundOperationsRoutes);
+router.use("/admin/payment-wallets", adminPaymentWalletsRoutes);
+router.use("/admin/documents", adminDocumentsRoutes);
+router.use("/admin/support", adminSupportRoutes);
 
 export default router;
