@@ -246,6 +246,9 @@ export async function signDocument(req: Request, res: Response) {
       namePos,
       dateText,
       datePos,
+      canvasW,
+      sigDisplayW,
+      sigDisplayH,
     } = req.body as {
       signatureDataUrl: string;
       sigPos?: { xPct: number; yPct: number };
@@ -254,6 +257,9 @@ export async function signDocument(req: Request, res: Response) {
       namePos?: { xPct: number; yPct: number };
       dateText?: string | null;
       datePos?: { xPct: number; yPct: number };
+      canvasW?: number;
+      sigDisplayW?: number;
+      sigDisplayH?: number;
     };
 
     if (!signatureDataUrl) {
@@ -290,12 +296,22 @@ export async function signDocument(req: Request, res: Response) {
     const lastPage = pages[pages.length - 1];
     const { width: pdfW, height: pdfH } = lastPage.getSize();
 
-    // Size: match the frontend preview formula (min(220, pdfW*0.32) * scale)
-    const intrinsic = sigImage.scale(1);
-    const sigWidth  = Math.min(220, pdfW * 0.32) * (sigScale ?? 1);
-    const sigHeight = intrinsic.width > 0
-      ? (intrinsic.height / intrinsic.width) * sigWidth
-      : sigWidth * 0.4;
+    // Size: use the canvas display proportions sent from the frontend so the
+    // final PDF exactly matches what the user saw on the positioning canvas.
+    // Fall back to image-based sizing for old clients that don't send these fields.
+    let sigWidth: number;
+    let sigHeight: number;
+    if (canvasW && sigDisplayW && sigDisplayH) {
+      const scaleRatio = pdfW / canvasW;
+      sigWidth  = sigDisplayW * (sigScale ?? 1) * scaleRatio;
+      sigHeight = sigDisplayH * (sigScale ?? 1) * scaleRatio;
+    } else {
+      const intrinsic = sigImage.scale(1);
+      sigWidth  = Math.min(220, pdfW * 0.32) * (sigScale ?? 1);
+      sigHeight = intrinsic.width > 0
+        ? (intrinsic.height / intrinsic.width) * sigWidth
+        : sigWidth * 0.4;
+    }
 
     // Position: convert top-left-origin screen fractions to bottom-left-origin PDF coords
     // Default falls back to bottom-right corner if no position was sent
@@ -317,11 +333,14 @@ export async function signDocument(req: Request, res: Response) {
     if ((nameText && nameText.trim()) || dateText) {
       try {
         const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        // TEXT_BOX_H=26px on canvas; baseline sits ~70% down the box → offset = 18 * scaleRatio
+        const textScaleRatio = canvasW ? pdfW / canvasW : 1;
+        const textYOffset = 18 * textScaleRatio;
 
         if (nameText && nameText.trim() && namePos) {
           lastPage.drawText(nameText.trim(), {
             x: Math.max(0, namePos.xPct * pdfW),
-            y: Math.max(0, pdfH * (1 - namePos.yPct) - 10),
+            y: Math.max(0, pdfH * (1 - namePos.yPct) - textYOffset),
             size: 10,
             font,
             color: rgb(0, 0, 0),
@@ -335,7 +354,7 @@ export async function signDocument(req: Request, res: Response) {
           const formatted = `${MONTHS[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
           lastPage.drawText(formatted, {
             x: Math.max(0, datePos.xPct * pdfW),
-            y: Math.max(0, pdfH * (1 - datePos.yPct) - 10),
+            y: Math.max(0, pdfH * (1 - datePos.yPct) - textYOffset),
             size: 10,
             font,
             color: rgb(0, 0, 0),

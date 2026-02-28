@@ -4,7 +4,7 @@ import { prisma } from "../config/database.js";
 import { success, error } from "../utils/response.js";
 import { hashPassword, comparePassword } from "../utils/password.js";
 import {
-  signAccessToken,
+  signAccessToken, signAdminAccessToken,
   signRefreshToken,
   verifyRefreshToken,
 } from "../utils/jwt.js";
@@ -13,7 +13,7 @@ import { sendOtpEmail, sendPasswordResetEmail } from "../services/email.service.
 import { sendLoginAlert, sendReferralSuccessNotification, sendWelcomeBonusNotification, notifyAdminNewUserSignup, notifyAdminUserSignin } from "../services/notification.service.js";
 import { getLocationString } from "../services/geolocation.service.js";
 import { env } from "../config/env.js";
-import { setAuthCookies, clearAuthCookies, getRefreshTokenFromCookies } from "../utils/cookies.js";
+import { setAuthCookies, setAccessTokenCookie, clearAuthCookies, getRefreshTokenFromCookies } from "../utils/cookies.js";
 import { verify2FACode } from "./twoFactor.controller.js";
 import { parseUserAgent } from "../utils/userAgent.js";
 
@@ -22,39 +22,6 @@ const TOKEN_ROTATION_GRACE_MS = 60 * 1000; // 60 seconds
 
 function generateReferralCode(): string {
   return crypto.randomBytes(4).toString("hex"); // 8 hex chars
-}
-
-/**
- * Returns the name/email of another admin/superadmin who currently has an
- * active session, or null if no such session exists.
- * Used to enforce the rule: only one admin account logged in at a time.
- */
-async function getActiveAdminConflict(
-  currentUserId: string
-): Promise<{ firstName: string; lastName: string; email: string } | null> {
-  // Find all other admin/superadmin accounts
-  const otherAdmins = await prisma.user.findMany({
-    where: {
-      role: { in: ["admin", "superadmin"] },
-      id: { not: currentUserId },
-    },
-    select: { id: true, firstName: true, lastName: true, email: true },
-  });
-
-  if (otherAdmins.length === 0) return null;
-
-  // Check if any of them has an active session
-  const activeSession = await prisma.session.findFirst({
-    where: {
-      userId: { in: otherAdmins.map((u) => u.id) },
-      isActive: true,
-    },
-    select: { userId: true },
-  });
-
-  if (!activeSession) return null;
-
-  return otherAdmins.find((u) => u.id === activeSession.userId) ?? null;
 }
 
 export async function register(req: Request, res: Response) {
@@ -221,16 +188,46 @@ export async function login(req: Request, res: Response) {
       });
     }
 
-    // Enforce single admin session: only one admin/superadmin logged in at a time
+    // Admin/superadmin: access-token only, with single-device enforcement
     if (user.role === "admin" || user.role === "superadmin") {
-      const conflict = await getActiveAdminConflict(user.id);
-      if (conflict) {
-        return res.status(409).json({
-          success: false,
-          adminConflict: true,
-          message: `Admin "${conflict.firstName} ${conflict.lastName}" is currently logged in. Only one admin session is allowed at a time. Please ask them to log out first.`,
-        });
+      const { device, browser, deviceModel, os, osVersion } = parseUserAgent(req.headers["user-agent"]);
+      const ipAddress = req.ip || "";
+      const location = await getLocationString(ipAddress);
+
+      const existingSessions = await prisma.session.findMany({
+        where: { userId: user.id, isActive: true },
+        select: { device: true, browser: true, deviceModel: true, os: true, location: true, lastActive: true },
+        orderBy: { lastActive: "desc" },
+      });
+
+      if (existingSessions.length > 0) {
+        const sameDeviceSession = existingSessions.find(
+          (s) => s.device === device && s.browser === browser && s.deviceModel === deviceModel && s.os === os
+        );
+        if (sameDeviceSession) {
+          await prisma.session.updateMany({ where: { userId: user.id, isActive: true }, data: { isActive: false } });
+        } else {
+          const mostRecentSession = existingSessions[0];
+          return res.status(409).json({
+            success: false,
+            requiresForceLogin: true,
+            message: "You are already logged in on another device",
+            existingSession: { device: mostRecentSession.device, browser: mostRecentSession.browser, location: mostRecentSession.location, lastActive: mostRecentSession.lastActive },
+            newDevice: { device, browser, location },
+          });
+        }
       }
+
+      const adminName = user.firstName && user.lastName
+        ? `${user.firstName} ${user.lastName}`
+        : user.firstName || user.lastName || undefined;
+      const accessToken = signAdminAccessToken({ userId: user.id, email: user.email, name: adminName, picture: user.profilePhoto || undefined });
+      await prisma.session.create({
+        data: { userId: user.id, token: accessToken, device, browser, deviceModel, os, osVersion, ipAddress, location, expiresAt: new Date(Date.now() + 20 * 60 * 1000) },
+      });
+      setAccessTokenCookie(res, accessToken);
+      console.log(`Admin login successful: ${normalizedEmail}`);
+      return success(res, { user, accessToken });
     }
 
     // Check for existing active sessions (Single-Device Login Security)
@@ -281,21 +278,6 @@ export async function login(req: Request, res: Response) {
         // Genuinely different device
         console.log(`⚠️ Login attempt: Active session from different device for ${normalizedEmail}`);
         const mostRecentSession = existingSessions[0];
-
-        // Admin accounts: hard block — must log out from current device first
-        if (user.role === "admin" || user.role === "superadmin") {
-          return res.status(409).json({
-            success: false,
-            adminDeviceConflict: true,
-            message: `You are already logged in on ${mostRecentSession.device} (${mostRecentSession.browser}). Admin accounts can only be active on one device at a time. Please log out from that device first.`,
-            existingSession: {
-              device: mostRecentSession.device,
-              browser: mostRecentSession.browser,
-              location: mostRecentSession.location,
-              lastActive: mostRecentSession.lastActive,
-            },
-          });
-        }
 
         return res.status(409).json({
           success: false,
@@ -460,24 +442,22 @@ export async function forceLogin(req: Request, res: Response) {
       });
     }
 
-    // Enforce single admin session
+    // Admin/superadmin: access-token only — invalidate existing, create fresh session
     if (user.role === "admin" || user.role === "superadmin") {
-      const conflict = await getActiveAdminConflict(user.id);
-      if (conflict) {
-        return res.status(409).json({
-          success: false,
-          adminConflict: true,
-          message: `Admin "${conflict.firstName} ${conflict.lastName}" is currently logged in. Only one admin session is allowed at a time. Please ask them to log out first.`,
-        });
-      }
-    }
-
-    // Admin accounts cannot force-login from a different device — hard single-device policy
-    if (user.role === "admin" || user.role === "superadmin") {
-      return res.status(403).json({
-        success: false,
-        message: "Admin accounts cannot override a session from another device. Please log out from your current device first.",
+      const { device, browser, deviceModel, os, osVersion } = parseUserAgent(req.headers["user-agent"]);
+      const ipAddress = req.ip || "";
+      const location = await getLocationString(ipAddress);
+      await prisma.session.updateMany({ where: { userId: user.id, isActive: true }, data: { isActive: false } });
+      const adminName = user.firstName && user.lastName
+        ? `${user.firstName} ${user.lastName}`
+        : user.firstName || user.lastName || undefined;
+      const accessToken = signAdminAccessToken({ userId: user.id, email: user.email, name: adminName, picture: user.profilePhoto || undefined });
+      await prisma.session.create({
+        data: { userId: user.id, token: accessToken, device, browser, deviceModel, os, osVersion, ipAddress, location, expiresAt: new Date(Date.now() + 20 * 60 * 1000) },
       });
+      setAccessTokenCookie(res, accessToken);
+      console.log(`Admin login successful: ${normalizedEmail}`);
+      return success(res, { user, accessToken });
     }
 
     // Invalidate ALL existing active sessions (force logout from all devices)
@@ -717,16 +697,51 @@ export async function verify2FALogin(req: Request, res: Response) {
       return error(res, "Invalid 2FA code. Please try again.", 401);
     }
 
-    // Enforce single admin session
+    // Admin/superadmin: access-token only, with single-device enforcement
     if (user.role === "admin" || user.role === "superadmin") {
-      const conflict = await getActiveAdminConflict(user.id);
-      if (conflict) {
-        return res.status(409).json({
-          success: false,
-          adminConflict: true,
-          message: `Admin "${conflict.firstName} ${conflict.lastName}" is currently logged in. Only one admin session is allowed at a time. Please ask them to log out first.`,
+      const { device: d2fa, browser: b2fa, deviceModel: dm2fa, os: os2fa, osVersion: osv2fa } = parseUserAgent(req.headers["user-agent"]);
+      const ipAddr2fa = req.ip || "";
+      const loc2fa = await getLocationString(ipAddr2fa);
+
+      if (isForceLogin) {
+        await prisma.session.updateMany({ where: { userId: user.id, isActive: true }, data: { isActive: false } });
+      } else {
+        const existingSessions = await prisma.session.findMany({
+          where: { userId: user.id, isActive: true },
+          select: { device: true, browser: true, deviceModel: true, os: true, location: true, lastActive: true },
+          orderBy: { lastActive: "desc" },
         });
+        if (existingSessions.length > 0) {
+          const sameDeviceSession = existingSessions.find(
+            (s) => s.device === d2fa && s.browser === b2fa && s.deviceModel === dm2fa && s.os === os2fa
+          );
+          if (sameDeviceSession) {
+            await prisma.session.updateMany({ where: { userId: user.id, isActive: true }, data: { isActive: false } });
+          } else {
+            const mostRecentSession = existingSessions[0];
+            return res.status(409).json({
+              success: false,
+              requiresForceLogin: true,
+              requiresTwoFactor: true,
+              message: "You are already logged in on another device",
+              existingSession: { device: mostRecentSession.device, browser: mostRecentSession.browser, location: mostRecentSession.location, lastActive: mostRecentSession.lastActive },
+              newDevice: { device: d2fa, browser: b2fa, location: loc2fa },
+            });
+          }
+        }
       }
+
+      const adminName = user.firstName && user.lastName
+        ? `${user.firstName} ${user.lastName}`
+        : user.firstName || user.lastName || undefined;
+      const accessToken = signAdminAccessToken({ userId: user.id, email: user.email, name: adminName, picture: user.profilePhoto || undefined });
+      await prisma.session.create({
+        data: { userId: user.id, token: accessToken, device: d2fa, browser: b2fa, deviceModel: dm2fa, os: os2fa, osVersion: osv2fa, ipAddress: ipAddr2fa, location: loc2fa, expiresAt: new Date(Date.now() + 20 * 60 * 1000) },
+      });
+      setAccessTokenCookie(res, accessToken);
+      setImmediate(() => sendLoginAlert(user.id, user.email, d2fa, b2fa, loc2fa, ipAddr2fa).catch(() => {}));
+      console.log(`Admin 2FA login successful: ${normalizedEmail}`);
+      return success(res, { user, accessToken });
     }
 
     // If force login, invalidate all existing sessions
@@ -772,21 +787,6 @@ export async function verify2FALogin(req: Request, res: Response) {
           const ipAddress = req.ip || "";
           const location = await getLocationString(ipAddress);
           const mostRecentSession = existingSessions[0];
-
-          // Admin accounts: hard block on different device
-          if (user.role === "admin" || user.role === "superadmin") {
-            return res.status(409).json({
-              success: false,
-              adminDeviceConflict: true,
-              message: `You are already logged in on ${mostRecentSession.device} (${mostRecentSession.browser}). Admin accounts can only be active on one device at a time. Please log out from that device first.`,
-              existingSession: {
-                device: mostRecentSession.device,
-                browser: mostRecentSession.browser,
-                location: mostRecentSession.location,
-                lastActive: mostRecentSession.lastActive,
-              },
-            });
-          }
 
           return res.status(409).json({
             success: false,
