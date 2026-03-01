@@ -284,10 +284,9 @@ export async function signDocument(req: Request, res: Response) {
       }
     }
 
-    // Fetch original PDF bytes from Cloudinary
-    const pdfResponse = await fetch(signedCloudinaryUrl(doc.documentUrl));
-    if (!pdfResponse.ok) return error(res, "Failed to fetch original document", 502);
-    const pdfBytes = Buffer.from(await pdfResponse.arrayBuffer());
+    // Fetch original PDF bytes from Cloudinary (uses multi-strategy fallback)
+    const pdfBytes = await fetchCloudinaryFile(doc.documentUrl);
+    if (!pdfBytes) return error(res, "Failed to fetch original document", 502);
 
     console.log("signDocument: loading PDF bytes, length=", pdfBytes.length);
     const pdfDoc = await PDFDocument.load(pdfBytes);
