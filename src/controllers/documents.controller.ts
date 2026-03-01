@@ -388,8 +388,9 @@ export async function signDocument(req: Request, res: Response) {
         .upload_stream(
           {
             folder: "alvarado/signed-documents",
-            resource_type: "raw",
-            public_id: `signed_${id}_${Date.now()}.pdf`,
+            resource_type: "image",
+            public_id: `signed_${id}_${Date.now()}`,
+            format: "pdf",
           },
           (err, result) => {
             if (err || !result) reject(err || new Error("Upload failed"));

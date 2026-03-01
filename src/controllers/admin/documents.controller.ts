@@ -1,8 +1,47 @@
 import { Request, Response } from "express";
 import { prisma } from "../../config/database.js";
+import { cloudinary } from "../../config/cloudinary.js";
 import { success, error } from "../../utils/response.js";
 import { sendDocumentForSigningNotification } from "../../services/notification.service.js";
 import { fetchCloudinaryFile } from "../documents.controller.js";
+
+/**
+ * Attempt to download a Cloudinary raw resource using the Admin API download
+ * endpoint, which bypasses CDN delivery restrictions that affect raw resources.
+ * This is a fallback for signed PDFs stored before the resource_type was changed
+ * to "image".
+ */
+async function fetchRawCloudinaryFile(storedUrl: string): Promise<Buffer | null> {
+  try {
+    const uploadIndex = storedUrl.indexOf("/upload/");
+    if (uploadIndex === -1) return null;
+
+    const afterUpload = storedUrl.slice(uploadIndex + 8);
+    const withoutVersion = afterUpload.replace(/^v\d+\//, "");
+
+    const cloudName = cloudinary.config().cloud_name;
+    const apiKey    = cloudinary.config().api_key;
+    const apiSecret = cloudinary.config().api_secret;
+    if (!cloudName || !apiKey || !apiSecret) return null;
+
+    const timestamp = Math.round(Date.now() / 1000);
+    const sigParams = { public_id: withoutVersion, timestamp };
+    const signature = (cloudinary.utils as any).api_sign_request(sigParams, apiSecret);
+    const adminUrl  = `https://api.cloudinary.com/v1_1/${cloudName}/raw/download`
+      + `?public_id=${encodeURIComponent(withoutVersion)}`
+      + `&api_key=${encodeURIComponent(apiKey)}`
+      + `&timestamp=${timestamp}`
+      + `&signature=${signature}`;
+
+    const res = await fetch(adminUrl);
+    if (res.ok) return Buffer.from(await res.arrayBuffer());
+    console.warn(`admin fetchRawCloudinaryFile: admin-api-download → ${res.status}`);
+    return null;
+  } catch (e) {
+    console.warn("admin fetchRawCloudinaryFile error:", e);
+    return null;
+  }
+}
 
 // GET /api/admin/documents
 export async function listDocuments(req: Request, res: Response) {
@@ -125,7 +164,9 @@ export async function downloadDocument(req: Request, res: Response) {
 
     const filename = `${doc.title.replace(/[^a-z0-9]/gi, "_")}${wantSigned ? "_signed" : ""}.pdf`;
 
-    const buffer = await fetchCloudinaryFile(fileUrl);
+    let buffer = await fetchCloudinaryFile(fileUrl);
+    // Fallback for signed PDFs stored as raw Cloudinary resources (older documents)
+    if (!buffer && wantSigned) buffer = await fetchRawCloudinaryFile(fileUrl);
     if (!buffer) return error(res, "File not available from storage", 502);
 
     res.setHeader("Content-Type", "application/pdf");
