@@ -664,3 +664,65 @@ ${emailConfig.appName} Team
     console.error(`❌ Failed to send buy now confirmation email to ${email}:`, err);
   }
 }
+
+
+/**
+ * Send referral commission email to referrer when referred user makes first deposit
+ */
+export async function sendReferralCommissionEmail(
+  email: string,
+  firstName: string,
+  referredName: string,
+  commission: number,
+  depositAmount: number
+) {
+  const formattedCommission = `$${commission.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const formattedDeposit = `$${depositAmount.toLocaleString()}`;
+
+  const body = `
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom:24px;">
+      <tr>
+        <td align="center" style="padding:24px; background:linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); border-radius:10px;">
+          <div style="width:60px;height:60px;background:rgba(255,255,255,0.2);border-radius:50%;display:inline-block;line-height:60px;text-align:center;font-size:28px;margin-bottom:12px;">&#127775;</div>
+          <h2 style="margin:0; font-size:22px; font-weight:700; color:#ffffff;">Referral Commission Earned!</h2>
+          <p style="margin:8px 0 0; font-size:14px; color:rgba(255,255,255,0.9);">Your referral just made their first deposit</p>
+        </td>
+      </tr>
+    </table>
+    ${paragraph(`Hello <strong>${firstName}</strong>,`)}
+    ${paragraph(`Great news! <strong>${referredName}</strong>, who joined Alvarado through your referral link, has just made their first deposit of <strong>${formattedDeposit}</strong>. As a thank-you, you've earned a 5% referral commission:`)}
+    ${bigAmount(formattedCommission, '#6d28d9')}
+    ${successBox(`<p style="margin:0; font-size:14px; color:#065f46;"><strong>&#10003; Commission credited:</strong> ${formattedCommission} has been added to your account balance.</p>`)}
+    ${paragraph('Keep sharing your referral link to earn more commissions every time a new member makes their first deposit!')}
+    ${ctaButton(`${emailConfig.appUrl}/dashboard/my-referral`, 'View My Referrals')}
+    <p style="margin:20px 0 0; font-size:14px; color:#9ca3af;">Regards,<br><strong style="color:#374151;">${emailConfig.appName} Team</strong></p>
+  `;
+
+  const textContent = `
+Hello ${firstName},
+
+You earned a referral commission!
+
+${referredName} made their first deposit of ${formattedDeposit}.
+Your 5% commission: ${formattedCommission} has been credited to your account balance.
+
+Log in to view your referral earnings: ${emailConfig.appUrl}/dashboard/my-referral
+
+---
+${emailConfig.appName}
+This is an automated message. Do not reply.
+  `.trim();
+
+  try {
+    await transporter.sendMail({
+      from: emailConfig.from,
+      to: email,
+      subject: `You earned ${formattedCommission} referral commission! | ${emailConfig.appName}`,
+      text: textContent,
+      html: emailWrapper({ preheader: `${referredName} made their first deposit — you earned ${formattedCommission} referral commission!`, body }),
+    });
+    console.log(`✅ Referral commission email sent to ${email}`);
+  } catch (err) {
+    console.error(`❌ Failed to send referral commission email to ${email}:`, err);
+  }
+}

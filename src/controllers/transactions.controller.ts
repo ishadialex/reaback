@@ -7,11 +7,7 @@ export async function getBalanceSummary(req: Request, res: Response) {
   try {
     const userId = req.userId!;
 
-    const [user, transactions, pendingFundOps, completedFundOps] = await Promise.all([
-      prisma.user.findUnique({
-        where: { id: userId },
-        select: { balance: true },
-      }),
+    const [transactions, pendingFundOps, completedFundOps] = await Promise.all([
       prisma.transaction.findMany({
         where: { userId, status: "completed" },
         select: { type: true, amount: true },
@@ -27,9 +23,12 @@ export async function getBalanceSummary(req: Request, res: Response) {
     ]);
 
     let deposits = 0;
-    let profits = 0;
+    let txProfits = 0;
     let adminBonuses = 0;
     let referralBonuses = 0;
+    let adminReferralCommissions = 0;
+    let adminProfitsAdded = 0;
+    let adminBalanceAdjustments = 0;
     let transferIn = 0;
     let withdrawals = 0;
     let investedFunds = 0;
@@ -38,8 +37,11 @@ export async function getBalanceSummary(req: Request, res: Response) {
     for (const tx of transactions) {
       switch (tx.type) {
         case "deposit": deposits += tx.amount; break;
-        case "profit": profits += tx.amount; break;
+        case "profit": txProfits += tx.amount; break;
         case "admin_bonus": adminBonuses += tx.amount; break;
+        case "admin_profits": adminProfitsAdded += tx.amount; break;
+        case "admin_referralCommissions": adminReferralCommissions += tx.amount; break;
+        case "admin_balance": adminBalanceAdjustments += tx.amount; break;
         case "referral": referralBonuses += tx.amount; break;
         case "transfer_received": transferIn += tx.amount; break;
         case "withdrawal": withdrawals += Math.abs(tx.amount); break;
@@ -54,7 +56,23 @@ export async function getBalanceSummary(req: Request, res: Response) {
       else if (op.type === "withdrawal") withdrawals += op.amount;
     }
 
-    const balance = user?.balance ?? 0;
+    // Compute balance entirely from transaction history so admin-credited profits,
+    // bonuses, and referral commissions are always reflected immediately.
+    const balance = deposits
+      + txProfits
+      + adminProfitsAdded
+      + adminBonuses
+      + adminReferralCommissions
+      + referralBonuses
+      + transferIn
+      + adminBalanceAdjustments
+      - withdrawals
+      - investedFunds
+      - transferOut;
+
+    const profits = txProfits + adminProfitsAdded;
+    const referralCommissions = referralBonuses + adminReferralCommissions;
+    const bonus = adminBonuses;
 
     // Pending amounts from fund operations awaiting admin approval
     const pendingDeposits = pendingFundOps
@@ -66,11 +84,14 @@ export async function getBalanceSummary(req: Request, res: Response) {
 
     return success(res, {
       balance,
+      profits,
+      referralCommissions,
+      bonus,
       pendingDeposits,
       pendingWithdrawals,
       breakdown: {
         deposits,
-        profits,
+        profits: txProfits,
         adminBonuses,
         referralBonuses,
         transferIn,

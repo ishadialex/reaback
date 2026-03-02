@@ -14,7 +14,9 @@ import {
   updateUserStatus,
   updateUserKyc,
   updateUserBalance,
+  assignReferral,
   getUserStats,
+  resetUser,
 } from "../../controllers/admin/users.controller.js";
 
 const router = Router();
@@ -30,5 +32,7 @@ router.patch("/:id/role", validate(updateUserRoleSchema), updateUserRole);
 router.patch("/:id/status", validate(updateUserStatusSchema), updateUserStatus);
 router.patch("/:id/kyc", validate(updateUserKycSchema), updateUserKyc);
 router.patch("/:id/balance", updateUserBalance);
+router.post("/:id/assign-referral", assignReferral);
+router.post("/:id/reset", resetUser);
 
 export default router;

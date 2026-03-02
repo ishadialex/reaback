@@ -832,6 +832,84 @@ export async function sendWelcomeBonusNotification(
 }
 
 /**
+ * Send referral commission notifications when admin assigns a referral.
+ * Covers both the referrer and the referred user with email + real-time push.
+ */
+export async function sendAdminReferralCommissionNotification(
+  referrerId: string,
+  referrerEmail: string,
+  referrerName: string,
+  referredUserId: string,
+  referredUserEmail: string,
+  referredUserName: string,
+  amount: number
+): Promise<void> {
+  try {
+    // ── Referrer: email ───────────────────────────────────────────────────────
+    const referrerBody = `
+      ${sectionHeading("Referral Commission Credited")}
+      ${paragraph(`Hello <strong>${referrerName}</strong>,`)}
+      ${paragraph(`Great news! A referral commission has been credited to your account for <strong>${referredUserName}</strong>.`)}
+      ${bigAmount(`+$${amount.toFixed(2)}`, "#8b5cf6")}
+      ${infoBox(`<p style="margin:0; font-size:14px; color:#374151; text-align:center;">Keep referring friends and colleagues to earn more commissions!</p>`)}
+      ${ctaButton("View Referral Dashboard", `${emailConfig.appUrl}/dashboard/referral`, "#8b5cf6")}
+      <p style="margin:20px 0 0; font-size:14px; color:#9ca3af;">Regards,<br><strong style="color:#374151;">${emailConfig.appName} Team</strong></p>
+    `;
+
+    await sendEmailNotification(
+      referrerId,
+      {
+        to: referrerEmail,
+        subject: `Referral Commission Credited — $${amount.toFixed(2)}`,
+        html: emailWrapper({ preheader: `$${amount.toFixed(2)} referral commission credited for ${referredUserName}.`, body: referrerBody }),
+        text: `Hello ${referrerName},\n\nA $${amount.toFixed(2)} referral commission has been credited to your account for ${referredUserName}.\n\nView your referral dashboard: ${emailConfig.appUrl}/dashboard/referral`,
+      },
+      NotificationType.EMAIL
+    );
+
+    emitToUser(referrerId, "referral_commission", {
+      type: "referral_commission",
+      referredUserName,
+      amount,
+      timestamp: new Date().toISOString(),
+    });
+
+    // ── Referred user: email ──────────────────────────────────────────────────
+    const referredBody = `
+      ${sectionHeading("Referral Commission Credited")}
+      ${paragraph(`Hello <strong>${referredUserName}</strong>,`)}
+      ${paragraph(`A referral commission has been credited to your account as part of the referral programme.`)}
+      ${bigAmount(`+$${amount.toFixed(2)}`, "#8b5cf6")}
+      ${successBox(`<p style="margin:0; font-size:14px; color:#166534; text-align:center;">Start investing today and grow your wealth with ${emailConfig.appName}!</p>`)}
+      ${ctaButton("Go to Dashboard", `${emailConfig.appUrl}/dashboard`, "#8b5cf6")}
+      <p style="margin:20px 0 0; font-size:14px; color:#9ca3af;">Regards,<br><strong style="color:#374151;">${emailConfig.appName} Team</strong></p>
+    `;
+
+    await sendEmailNotification(
+      referredUserId,
+      {
+        to: referredUserEmail,
+        subject: `Referral Commission Credited — $${amount.toFixed(2)}`,
+        html: emailWrapper({ preheader: `$${amount.toFixed(2)} referral commission has been credited to your account.`, body: referredBody }),
+        text: `Hello ${referredUserName},\n\nA $${amount.toFixed(2)} referral commission has been credited to your account.\n\nGo to your dashboard: ${emailConfig.appUrl}/dashboard`,
+      },
+      NotificationType.EMAIL
+    );
+
+    emitToUser(referredUserId, "referral_commission", {
+      type: "referral_commission",
+      referrerName,
+      amount,
+      timestamp: new Date().toISOString(),
+    });
+
+    console.log(`✅ Admin referral commission notifications sent — referrer: ${referrerEmail}, referred: ${referredUserEmail}`);
+  } catch (err) {
+    console.error("Error sending admin referral commission notifications:", err);
+  }
+}
+
+/**
  * Send newsletter welcome email
  */
 export async function sendNewsletterWelcomeEmail(

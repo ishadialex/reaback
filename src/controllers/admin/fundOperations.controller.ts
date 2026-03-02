@@ -4,6 +4,7 @@ import { success, error } from "../../utils/response.js";
 import {
   sendFundOperationApprovedEmail,
   sendFundOperationRejectedEmail,
+  sendReferralCommissionEmail,
 } from "../../services/email.service.js";
 import { createInAppNotification } from "../../services/notification.service.js";
 
@@ -107,6 +108,13 @@ export async function approveFundOperation(req: Request, res: Response) {
       ).catch((err) => console.error("Failed to send fund operation approved email:", err));
     }
 
+    // Referral commission: 5% to referrer on referred user's FIRST completed deposit (non-blocking)
+    if (isDeposit) {
+      processReferralCommission(op.userId, op.amount, id).catch((e: unknown) =>
+        console.error("Referral commission processing error:", e)
+      );
+    }
+
     return success(res, null, `${isDeposit ? "Deposit" : "Withdrawal"} approved`);
   } catch (err) {
     console.error("approveFundOperation error:", err);
@@ -161,5 +169,69 @@ export async function rejectFundOperation(req: Request, res: Response) {
   } catch (err) {
     console.error("rejectFundOperation error:", err);
     return error(res, "Failed to reject fund operation", 500);
+  }
+}
+
+async function processReferralCommission(userId: string, depositAmount: number, fundOpId: string) {
+  // Only trigger on the user's FIRST completed deposit
+  const previousDeposits = await prisma.fundOperation.count({
+    where: {
+      userId,
+      type: "deposit",
+      status: "completed",
+      id: { not: fundOpId },
+    },
+  });
+
+  if (previousDeposits > 0) return;
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { referredById: true, firstName: true, lastName: true },
+  });
+
+  if (!user?.referredById) return;
+
+  const referrer = await prisma.user.findUnique({
+    where: { id: user.referredById },
+    select: { id: true, email: true, firstName: true },
+  });
+
+  if (!referrer) return;
+
+  const commission = depositAmount * 0.05;
+  const referredName = `${user.firstName} ${user.lastName}`;
+  const commissionStr = commission.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  await prisma.user.update({
+    where: { id: referrer.id },
+    data: { balance: { increment: commission } },
+  });
+
+  await prisma.transaction.create({
+    data: {
+      userId: referrer.id,
+      type: "referral",
+      amount: commission,
+      status: "completed",
+      description: `5% referral commission from ${referredName}'s first deposit`,
+    },
+  });
+
+  await createInAppNotification(
+    referrer.id,
+    "investment",
+    "Referral Commission Earned",
+    `You earned $${commissionStr} referral commission from ${referredName}'s first deposit.`
+  );
+
+  if (referrer.email && referrer.firstName) {
+    sendReferralCommissionEmail(
+      referrer.email,
+      referrer.firstName,
+      referredName,
+      commission,
+      depositAmount
+    ).catch((e: unknown) => console.error("Failed to send referral commission email:", e));
   }
 }

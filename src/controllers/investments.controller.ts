@@ -13,7 +13,7 @@ export async function getUserInvestments(req: Request, res: Response) {
           select: { title: true, image: true, minInvestment: true },
         },
         property: {
-          select: { title: true, images: true, expectedROI: true },
+          select: { title: true, images: true, expectedROI: true, monthlyReturn: true, duration: true },
         },
       },
       orderBy: { createdAt: "desc" },
@@ -22,8 +22,19 @@ export async function getUserInvestments(req: Request, res: Response) {
     // Normalize to consistent shape
     const normalized = investments.map((inv) => {
       const isProperty = !!inv.propertyId;
-      const expectedReturn = Math.round(inv.amount * (inv.expectedROI / 100) * 100) / 100;
       const monthlyReturn = Math.round(inv.amount * (inv.monthlyReturn / 100) * 100) / 100;
+
+      // Use the investment's stored ROI, falling back to the property's current ROI.
+      // If both are 0, derive the expected return from monthly return × duration.
+      const effectiveROI = inv.expectedROI || (isProperty ? (inv.property?.expectedROI ?? 0) : 0);
+      let expectedReturn: number;
+      if (effectiveROI > 0) {
+        expectedReturn = Math.round(inv.amount * (effectiveROI / 100) * 100) / 100;
+      } else if (monthlyReturn > 0 && isProperty && (inv.property?.duration ?? 0) > 0) {
+        expectedReturn = Math.round(monthlyReturn * (inv.property!.duration) * 100) / 100;
+      } else {
+        expectedReturn = 0;
+      }
       const expectedTotal = inv.amount + expectedReturn;
 
       return {
