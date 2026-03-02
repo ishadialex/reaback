@@ -7,17 +7,13 @@ export async function getBalanceSummary(req: Request, res: Response) {
   try {
     const userId = req.userId!;
 
-    const [transactions, pendingFundOps, completedFundOps] = await Promise.all([
+    const [transactions, pendingFundOps] = await Promise.all([
       prisma.transaction.findMany({
         where: { userId, status: "completed" },
         select: { type: true, amount: true },
       }),
       prisma.fundOperation.findMany({
         where: { userId, status: "pending" },
-        select: { type: true, amount: true },
-      }),
-      prisma.fundOperation.findMany({
-        where: { userId, status: { in: ["completed", "approved"] } },
         select: { type: true, amount: true },
       }),
     ]);
@@ -50,14 +46,8 @@ export async function getBalanceSummary(req: Request, res: Response) {
       }
     }
 
-    // Include completed/approved fund operations in balance
-    for (const op of completedFundOps) {
-      if (op.type === "deposit") deposits += op.amount;
-      else if (op.type === "withdrawal") withdrawals += op.amount;
-    }
-
-    // Compute balance entirely from transaction history so admin-credited profits,
-    // bonuses, and referral commissions are always reflected immediately.
+    // Compute balance from transaction history — this is the only source that is
+    // always complete, including admin-credited profits added before the dual-increment fix.
     const balance = deposits
       + txProfits
       + adminProfitsAdded

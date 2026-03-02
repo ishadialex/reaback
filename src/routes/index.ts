@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { authLimiter, apiLimiter, publicLimiter } from "../middleware/rateLimit.js";
 import monitorRoutes from "./monitor.routes.js";
 import publicRoutes from "./public.routes.js";
 import pdfRoutes from "./pdf.routes.js";
@@ -41,34 +42,34 @@ const router = Router();
 router.use("/", monitorRoutes);
 
 // Public routes (no auth)
-router.use("/public", publicRoutes);
-router.use("/pdf", pdfRoutes);
-router.use("/newsletter", newsletterRoutes);
-router.use("/contact", contactRoutes);
+router.use("/public", publicLimiter, publicRoutes);
+router.use("/pdf", publicLimiter, pdfRoutes);
+router.use("/newsletter", publicLimiter, newsletterRoutes);
+router.use("/contact", publicLimiter, contactRoutes);
 
 // Auth routes
-router.use("/auth", authRoutes);
-router.use("/auth", oauthRoutes);
+router.use("/auth", authLimiter, authRoutes);
+router.use("/auth", authLimiter, oauthRoutes);
 
 // User routes (JWT required)
-router.use("/profile", profileRoutes);
-router.use("/settings", settingsRoutes);
-router.use("/sessions", sessionsRoutes);
-router.use("/2fa", twoFactorRoutes);
-router.use("/kyc", kycRoutes);
-router.use("/support", supportRoutes);
-router.use("/transfers", transferRoutes);
-router.use("/transactions", transactionsRoutes);
-router.use("/investments", investmentsRoutes);
-router.use("/properties", propertiesRoutes);
-router.use("/properties", bidRoutes);
-router.use("/notifications", notificationsRoutes);
-router.use("/referrals", referralRoutes);
-router.use("/fund", fundRoutes);
-router.use("/payment-methods", paymentMethodsRoutes);
-router.use("/fund-operations", fundOperationsRoutes);
-router.use("/reviews", reviewsRoutes);
-router.use("/documents", documentsRoutes);
+router.use("/profile", apiLimiter, profileRoutes);
+router.use("/settings", apiLimiter, settingsRoutes);
+router.use("/sessions", apiLimiter, sessionsRoutes);
+router.use("/2fa", apiLimiter, twoFactorRoutes);
+router.use("/kyc", apiLimiter, kycRoutes);
+router.use("/support", apiLimiter, supportRoutes);
+router.use("/transfers", apiLimiter, transferRoutes);
+router.use("/transactions", apiLimiter, transactionsRoutes);
+router.use("/investments", apiLimiter, investmentsRoutes);
+router.use("/properties", apiLimiter, propertiesRoutes);
+router.use("/properties", apiLimiter, bidRoutes);
+router.use("/notifications", apiLimiter, notificationsRoutes);
+router.use("/referrals", apiLimiter, referralRoutes);
+router.use("/fund", apiLimiter, fundRoutes);
+router.use("/payment-methods", apiLimiter, paymentMethodsRoutes);
+router.use("/fund-operations", apiLimiter, fundOperationsRoutes);
+router.use("/reviews", apiLimiter, reviewsRoutes);
+router.use("/documents", apiLimiter, documentsRoutes);
 
 // Admin routes (API key OR admin role required)
 router.use("/admin/team", adminTeamRoutes);
