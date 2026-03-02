@@ -8,7 +8,7 @@ const isProd = process.env.NODE_ENV === "production";
  */
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: isProd ? 10 : 100,
+  max: isProd ? 100 : 100,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, message: "Too many attempts. Please wait 15 minutes and try again." },
@@ -32,7 +32,7 @@ export const apiLimiter = rateLimit({
  */
 export const publicLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: isProd ? 30 : 500,
+  max: isProd ? 100 : 500,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, message: "Too many requests. Please try again later." },

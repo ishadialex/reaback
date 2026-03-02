@@ -116,7 +116,7 @@ export async function register(req: Request, res: Response) {
 
 export async function login(req: Request, res: Response) {
   try {
-    const { email, password } = req.body;
+    const { email, password, rememberMe = false } = req.body;
 
     // Normalize email to lowercase for case-insensitive lookups
     const normalizedEmail = email.toLowerCase().trim();
@@ -303,18 +303,20 @@ export async function login(req: Request, res: Response) {
       ? `${user.firstName} ${user.lastName}`
       : user.firstName || user.lastName || undefined;
 
+    const sessionTtlMs = rememberMe
+      ? 3 * 24 * 60 * 60 * 1000   // 3 days
+      : 30 * 60 * 1000;            // 30 minutes
+
     const accessToken = signAccessToken({
       userId: user.id,
       email: user.email,
       name,
       picture: user.profilePhoto || undefined
     });
-    const refreshToken = signRefreshToken({
-      userId: user.id,
-      email: user.email,
-      name,
-      picture: user.profilePhoto || undefined
-    });
+    const refreshToken = signRefreshToken(
+      { userId: user.id, email: user.email, name, picture: user.profilePhoto || undefined, rememberMe },
+      rememberMe ? "3d" : "30m"
+    );
 
     await prisma.session.create({
       data: {
@@ -327,7 +329,7 @@ export async function login(req: Request, res: Response) {
         osVersion,
         ipAddress,
         location,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + sessionTtlMs),
       },
     });
 
@@ -351,10 +353,10 @@ export async function login(req: Request, res: Response) {
       ).catch((err) => console.error("Error sending admin signin notification:", err));
     });
 
-    console.log(`✅ Login successful: ${normalizedEmail} from ${location}`);
+    console.log(`✅ Login successful: ${normalizedEmail} from ${location} (rememberMe=${rememberMe})`);
 
     // Set tokens as httpOnly cookies (combined + individual for proxy compatibility)
-    setAuthCookies(res, accessToken, refreshToken);
+    setAuthCookies(res, accessToken, refreshToken, rememberMe);
 
     return success(res, {
       user,
@@ -369,7 +371,7 @@ export async function login(req: Request, res: Response) {
 
 export async function forceLogin(req: Request, res: Response) {
   try {
-    const { email, password } = req.body;
+    const { email, password, rememberMe = false } = req.body;
 
     // Normalize email to lowercase for case-insensitive lookups
     const normalizedEmail = email.toLowerCase().trim();
@@ -483,18 +485,20 @@ export async function forceLogin(req: Request, res: Response) {
       ? `${user.firstName} ${user.lastName}`
       : user.firstName || user.lastName || undefined;
 
+    const sessionTtlMs = rememberMe
+      ? 3 * 24 * 60 * 60 * 1000
+      : 30 * 60 * 1000;
+
     const accessToken = signAccessToken({
       userId: user.id,
       email: user.email,
       name,
       picture: user.profilePhoto || undefined
     });
-    const refreshToken = signRefreshToken({
-      userId: user.id,
-      email: user.email,
-      name,
-      picture: user.profilePhoto || undefined
-    });
+    const refreshToken = signRefreshToken(
+      { userId: user.id, email: user.email, name, picture: user.profilePhoto || undefined, rememberMe },
+      rememberMe ? "3d" : "30m"
+    );
 
     await prisma.session.create({
       data: {
@@ -507,7 +511,7 @@ export async function forceLogin(req: Request, res: Response) {
         osVersion,
         ipAddress,
         location,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + sessionTtlMs),
       },
     });
 
@@ -531,10 +535,10 @@ export async function forceLogin(req: Request, res: Response) {
       ).catch((err) => console.error("Error sending admin signin notification:", err));
     });
 
-    console.log(`✅ Force login successful: ${normalizedEmail} from ${location} (${invalidatedSessions.count} device(s) logged out)`);
+    console.log(`✅ Force login successful: ${normalizedEmail} from ${location} (${invalidatedSessions.count} device(s) logged out, rememberMe=${rememberMe})`);
 
     // Set tokens as httpOnly cookies (combined + individual for proxy compatibility)
-    setAuthCookies(res, accessToken, refreshToken);
+    setAuthCookies(res, accessToken, refreshToken, rememberMe);
 
     return success(res, {
       user,
@@ -550,7 +554,7 @@ export async function forceLogin(req: Request, res: Response) {
 
 export async function verify2FALogin(req: Request, res: Response) {
   try {
-    const { email, password, code, oauthToken, forceLogin: isForceLogin } = req.body;
+    const { email, password, code, oauthToken, forceLogin: isForceLogin, rememberMe = false } = req.body;
 
     // Handle OAuth-based 2FA verification
     if (oauthToken) {
@@ -814,18 +818,20 @@ export async function verify2FALogin(req: Request, res: Response) {
       ? `${user.firstName} ${user.lastName}`
       : user.firstName || user.lastName || undefined;
 
+    const sessionTtlMs = rememberMe
+      ? 3 * 24 * 60 * 60 * 1000
+      : 30 * 60 * 1000;
+
     const accessToken = signAccessToken({
       userId: user.id,
       email: user.email,
       name,
       picture: user.profilePhoto || undefined
     });
-    const refreshToken = signRefreshToken({
-      userId: user.id,
-      email: user.email,
-      name,
-      picture: user.profilePhoto || undefined
-    });
+    const refreshToken = signRefreshToken(
+      { userId: user.id, email: user.email, name, picture: user.profilePhoto || undefined, rememberMe },
+      rememberMe ? "3d" : "30m"
+    );
 
     await prisma.session.create({
       data: {
@@ -838,7 +844,7 @@ export async function verify2FALogin(req: Request, res: Response) {
         osVersion,
         ipAddress,
         location,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + sessionTtlMs),
       },
     });
 
@@ -860,9 +866,9 @@ export async function verify2FALogin(req: Request, res: Response) {
       ).catch((err) => console.error("Error sending admin signin notification:", err));
     });
 
-    console.log(`✅ 2FA login successful: ${normalizedEmail} from ${location}`);
+    console.log(`✅ 2FA login successful: ${normalizedEmail} from ${location} (rememberMe=${rememberMe})`);
 
-    setAuthCookies(res, accessToken, refreshToken);
+    setAuthCookies(res, accessToken, refreshToken, rememberMe);
 
     return success(res, { user, accessToken, refreshToken });
   } catch (err) {
@@ -1360,18 +1366,21 @@ export async function refreshToken(req: Request, res: Response) {
       ? `${user.firstName} ${user.lastName}`
       : user?.firstName || user?.lastName || undefined;
 
+    const rememberMe = payload.rememberMe ?? false;
+    const sessionTtlMs = rememberMe
+      ? 3 * 24 * 60 * 60 * 1000
+      : 30 * 60 * 1000;
+
     const newAccessToken = signAccessToken({
       userId: payload.userId,
       email: payload.email,
       name,
       picture: user?.profilePhoto || undefined
     });
-    const newRefreshToken = signRefreshToken({
-      userId: payload.userId,
-      email: payload.email,
-      name,
-      picture: user?.profilePhoto || undefined
-    });
+    const newRefreshToken = signRefreshToken(
+      { userId: payload.userId, email: payload.email, name, picture: user?.profilePhoto || undefined, rememberMe },
+      rememberMe ? "3d" : "30m"
+    );
 
     // Rotate token and store the old one for the grace period
     await prisma.session.update({
@@ -1381,12 +1390,12 @@ export async function refreshToken(req: Request, res: Response) {
         tokenRotatedAt: new Date(),
         token: newRefreshToken,
         lastActive: new Date(),
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + sessionTtlMs),
       },
     });
 
     // Set new tokens as httpOnly cookies (combined + individual for proxy compatibility)
-    setAuthCookies(res, newAccessToken, newRefreshToken);
+    setAuthCookies(res, newAccessToken, newRefreshToken, rememberMe);
 
     return success(res, {
       message: "Tokens refreshed successfully",

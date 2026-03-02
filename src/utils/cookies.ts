@@ -33,24 +33,28 @@ export function setRefreshTokenCookie(res: Response, token: string): void {
 }
 
 /**
- * Set both auth cookies using a single combined cookie
- * This avoids issues with proxies dropping multiple Set-Cookie headers
+ * Set both auth cookies using a single combined cookie.
+ * rememberMe=true  → 3-day cookie TTL
+ * rememberMe=false → 30-minute cookie TTL (session-like)
+ * This avoids issues with proxies dropping multiple Set-Cookie headers.
  */
-export function setAuthCookies(res: Response, accessToken: string, refreshToken: string): void {
-  // Combine both tokens into a single cookie as JSON
+export function setAuthCookies(res: Response, accessToken: string, refreshToken: string, rememberMe = false): void {
+  const refreshMaxAge = rememberMe
+    ? 3 * 24 * 60 * 60 * 1000  // 3 days
+    : 30 * 60 * 1000;           // 30 minutes
+
   const authData = JSON.stringify({ at: accessToken, rt: refreshToken });
   res.cookie("auth_tokens", authData, {
     ...cookieConfig,
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days (matches refresh token)
+    maxAge: refreshMaxAge,
   });
-  // Also set individual cookies for backwards compatibility
   res.cookie("access_token", accessToken, {
     ...cookieConfig,
-    maxAge: 15 * 60 * 1000,
+    maxAge: 15 * 60 * 1000, // always 15 min
   });
   res.cookie("refresh_token", refreshToken, {
     ...cookieConfig,
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+    maxAge: refreshMaxAge,
   });
 }
 

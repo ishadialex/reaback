@@ -6,6 +6,7 @@ interface TokenPayload {
   email: string;
   name?: string;
   picture?: string;
+  rememberMe?: boolean;
 }
 
 export function signAccessToken(payload: TokenPayload): string {
@@ -18,9 +19,9 @@ export function signAdminAccessToken(payload: TokenPayload): string {
   return jwt.sign(payload, env.JWT_SECRET, { expiresIn: "20m" });
 }
 
-export function signRefreshToken(payload: TokenPayload): string {
+export function signRefreshToken(payload: TokenPayload, expiresIn?: string): string {
   // @ts-ignore - Type inference issue with jwt.sign overloads
-  return jwt.sign(payload, env.JWT_REFRESH_SECRET, { expiresIn: env.JWT_REFRESH_EXPIRES_IN });
+  return jwt.sign(payload, env.JWT_REFRESH_SECRET, { expiresIn: expiresIn ?? env.JWT_REFRESH_EXPIRES_IN });
 }
 
 export function verifyAccessToken(token: string): TokenPayload {
