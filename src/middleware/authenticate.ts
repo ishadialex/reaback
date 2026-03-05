@@ -12,6 +12,22 @@ declare global {
   }
 }
 
+export function optionalAuthenticate(req: Request, _res: Response, next: NextFunction) {
+  let token = getAccessTokenFromCookies(req);
+  if (!token) {
+    const header = req.headers.authorization;
+    if (header && header.startsWith("Bearer ")) token = header.slice(7);
+  }
+  if (token) {
+    try {
+      const payload = verifyAccessToken(token);
+      req.userId = payload.userId;
+      req.userEmail = payload.email;
+    } catch {}
+  }
+  next();
+}
+
 export function authenticate(req: Request, res: Response, next: NextFunction) {
   // Try to get token from httpOnly cookie first (most secure)
   let token = getAccessTokenFromCookies(req);

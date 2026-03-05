@@ -115,6 +115,9 @@ model User {
   propertyReviews PropertyReview[]
   kyc             KYC?
   documentSigningRequests DocumentSigningRequest[]
+  forumPosts      ForumPost[]    @relation("ForumPosts")
+  forumComments   ForumComment[] @relation("ForumComments")
+  forumLikes      ForumLike[]    @relation("ForumLikes")
 
 }
 
@@ -435,7 +438,7 @@ model Property {
 model PropertyReview {
   id         String   @id @default(auto()) @map("_id") @db.ObjectId
   propertyId String   @db.ObjectId
-  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  property   Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   userId     String   @db.ObjectId
   user       User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   rating     Int      // 1-5
@@ -563,6 +566,72 @@ model DocumentSigningRequest {
 
   @@index([userId, status])
   @@index([status, createdAt])
+}
+
+// ──────────────────────────────────────────────
+// Forum
+// ──────────────────────────────────────────────
+
+model ForumPost {
+  id            String         @id @default(auto()) @map("_id") @db.ObjectId
+  title         String
+  content       String
+  images        String[]       @default([])
+  authorId      String         @db.ObjectId
+  author        User           @relation("ForumPosts", fields: [authorId], references: [id], onDelete: Cascade)
+  likesCount    Int            @default(0)
+  commentsCount Int            @default(0)
+  isPinned      Boolean        @default(false)
+  isDeleted     Boolean        @default(false)
+  lastCommentAt DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  comments      ForumComment[]
+  likes         ForumLike[]
+
+  @@index([isDeleted, isPinned, createdAt])
+  @@index([authorId])
+}
+
+model ForumComment {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  content     String
+  images      String[]  @default([])
+  authorId    String    @db.ObjectId
+  author      User      @relation("ForumComments", fields: [authorId], references: [id], onDelete: Cascade)
+  postId      String    @db.ObjectId
+  post        ForumPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  // Depth-1 (Instagram-style):
+  // parentId = null  → top-level comment
+  // parentId = root comment id → reply (always points to root, never to another reply)
+  parentId    String?   @db.ObjectId
+  // replyToId = the specific comment/reply being responded to (for @mention display)
+  replyToId   String?   @db.ObjectId
+  replyToName String?   // snapshot: "FirstName LastName" of person being replied to
+  likesCount  Int       @default(0)
+  isDeleted   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  likes       ForumLike[]
+
+  @@index([postId, parentId])
+  @@index([authorId])
+}
+
+model ForumLike {
+  id        String        @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String        @db.ObjectId
+  user      User          @relation("ForumLikes", fields: [userId], references: [id], onDelete: Cascade)
+  postId    String?       @db.ObjectId
+  post      ForumPost?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  commentId String?       @db.ObjectId
+  comment   ForumComment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  createdAt DateTime      @default(now())
+
+  @@index([userId, postId])
+  @@index([userId, commentId])
 }
 
 // ──────────────────────────────────────────────

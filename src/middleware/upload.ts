@@ -136,3 +136,20 @@ export const uploadSigningDocument = multer({
   storage: signingDocStorage,
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
 }).single("file");
+
+const forumStorage = isCloudinaryConfigured
+  ? new CloudinaryStorage({
+      cloudinary,
+      params: {
+        folder: "alvarado/forum",
+        allowed_formats: ["jpg", "jpeg", "png", "gif", "webp"],
+        transformation: [{ width: 1200, height: 1200, crop: "limit" }],
+      } as any,
+    })
+  : multer.memoryStorage();
+
+// Up to 5 images per post/comment/reply
+export const uploadForumImages = multer({
+  storage: forumStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB per image
+}).array("images", 5);

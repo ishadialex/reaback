@@ -164,7 +164,7 @@ export async function getMyReviews(req: Request, res: Response) {
 /** GET /api/public/reviews
  *  Returns all reviews across all properties (no auth required).
  */
-export async function getAllPublicReviews(req: Request, res: Response) {
+export async function getAllPublicReviews(_req: Request, res: Response) {
   try {
     const reviews = await prisma.propertyReview.findMany({
       where: { isApproved: true },
@@ -183,7 +183,116 @@ export async function getAllPublicReviews(req: Request, res: Response) {
 
 
 
-// ── Admin ────────────────────────────────────────────────────────────────────
+// ── Admin (new dedicated admin routes) ───────────────────────────────────────
+
+/** GET /api/admin/reviews
+ *  Paginated list of all reviews with filters.
+ */
+export async function adminListReviews(req: Request, res: Response) {
+  try {
+    const { approved, page = "1", limit = "20" } = req.query;
+    const pageNum = Math.max(1, parseInt(page as string));
+    const limitNum = Math.min(50, Math.max(1, parseInt(limit as string)));
+    const skip = (pageNum - 1) * limitNum;
+
+    const where: Record<string, unknown> = {};
+    if (approved === "true") where.isApproved = true;
+    if (approved === "false") where.isApproved = false;
+
+    const [reviews, total] = await Promise.all([
+      prisma.propertyReview.findMany({
+        where,
+        include: {
+          property: { select: { id: true, title: true, location: true } },
+          user: { select: { firstName: true, lastName: true, email: true, profilePhoto: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limitNum,
+      }),
+      prisma.propertyReview.count({ where }),
+    ]);
+
+    return success(res, {
+      reviews: reviews.map(mapReview),
+      total,
+      page: pageNum,
+      pages: Math.ceil(total / limitNum),
+    });
+  } catch (err: any) {
+    console.error("adminListReviews error:", err?.message, err?.code, err?.stack);
+    return error(res, "Failed to fetch reviews", 500);
+  }
+}
+
+/** PATCH /api/admin/reviews/:reviewId
+ *  Admin edits any review field including createdAt/updatedAt.
+ */
+export async function adminEditReview(req: Request, res: Response) {
+  try {
+    const reviewId = req.params.reviewId as string;
+    const { title, body, rating, isApproved, createdAt, updatedAt } = req.body;
+
+    const existing = await prisma.propertyReview.findUnique({ where: { id: reviewId } });
+    if (!existing) return error(res, "Review not found", 404);
+
+    const fields: Record<string, any> = {};
+    if (title !== undefined) fields.title = String(title).trim();
+    if (body !== undefined) {
+      if (typeof body !== "string" || body.trim().length < 5)
+        return error(res, "Review body must be at least 5 characters", 400);
+      fields.body = body.trim();
+    }
+    if (rating !== undefined) {
+      const ratingNum = Number(rating);
+      if (!Number.isInteger(ratingNum) || ratingNum < 1 || ratingNum > 5)
+        return error(res, "Rating must be between 1 and 5", 400);
+      fields.rating = ratingNum;
+    }
+    if (typeof isApproved === "boolean") fields.isApproved = isApproved;
+
+    if (createdAt || updatedAt) {
+      const setDoc: Record<string, any> = { ...fields };
+      if (createdAt) setDoc.createdAt = { $date: new Date(createdAt).toISOString() };
+      if (updatedAt) setDoc.updatedAt = { $date: new Date(updatedAt).toISOString() };
+      await prisma.$runCommandRaw({
+        update: "PropertyReview",
+        updates: [{ q: { _id: { $oid: reviewId } }, u: { $set: setDoc } }],
+      });
+    } else if (Object.keys(fields).length > 0) {
+      await prisma.propertyReview.update({ where: { id: reviewId }, data: fields });
+    }
+
+    const updated = await prisma.propertyReview.findUnique({
+      where: { id: reviewId },
+      include: {
+        property: { select: { id: true, title: true, location: true } },
+        user: { select: { firstName: true, lastName: true, email: true, profilePhoto: true } },
+      },
+    });
+    return success(res, { review: mapReview(updated) });
+  } catch (err: any) {
+    console.error("adminEditReview error:", err);
+    return error(res, "Failed to update review", 500);
+  }
+}
+
+/** DELETE /api/admin/reviews/:reviewId
+ *  Admin hard-deletes any review.
+ */
+export async function adminDeleteReview(req: Request, res: Response) {
+  try {
+    const reviewId = req.params.reviewId as string;
+    const existing = await prisma.propertyReview.findUnique({ where: { id: reviewId } });
+    if (!existing) return error(res, "Review not found", 404);
+    await prisma.propertyReview.delete({ where: { id: reviewId } });
+    return success(res, { deleted: true });
+  } catch (err) {
+    return error(res, "Failed to delete review", 500);
+  }
+}
+
+// ── Admin (legacy routes kept for backward compat) ────────────────────────────
 
 /** GET /api/reviews/admin/all
  *  Admin gets all reviews (pending + approved).
