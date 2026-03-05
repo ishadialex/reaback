@@ -4,6 +4,7 @@ import { env } from "../config/env.js";
 import { verifyAccessToken } from "../utils/jwt.js";
 import { prisma } from "../config/database.js";
 import { error } from "../utils/response.js";
+import { getAccessTokenFromCookies } from "../utils/cookies.js";
 
 /**
  * Flexible admin authentication middleware
@@ -12,13 +13,17 @@ import { error } from "../utils/response.js";
  * 2. JWT with admin/superadmin role (new)
  */
 export async function adminAuthFlexible(req: Request, res: Response, next: NextFunction) {
-  const header = req.headers.authorization;
+  // Try cookie first (same as authenticate middleware)
+  let token = getAccessTokenFromCookies(req);
 
-  if (!header || !header.startsWith("Bearer ")) {
-    return error(res, "Authorization header is required", 401);
+  // Fall back to Authorization header (for API key or explicit Bearer token)
+  if (!token) {
+    const header = req.headers.authorization;
+    if (!header || !header.startsWith("Bearer ")) {
+      return error(res, "Authorization header is required", 401);
+    }
+    token = header.slice(7);
   }
-
-  const token = header.slice(7);
 
   // Try API Key authentication first (for backward compatibility)
   const expectedApiKey = env.ADMIN_API_KEY;

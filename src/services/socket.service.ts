@@ -110,3 +110,12 @@ export function emitToUser(
     io.to(socketId).emit(event, data);
   }
 }
+
+/**
+ * Notify all of a user's connected sockets that their session has been revoked
+ * (e.g. force-login from another device). The dashboard listens for this and
+ * immediately logs out without waiting for the next token refresh.
+ */
+export function emitSessionRevoked(userId: string): void {
+  emitToUser(userId, "session_revoked", {});
+}

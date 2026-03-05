@@ -8,10 +8,10 @@ import routes from "./routes/index.js";
 
 const app = express();
 
-// Trust proxy - CRITICAL for production when behind reverse proxy
-// Allows Express to read X-Forwarded-For header for real client IPs
-// Required for: Heroku, Vercel, AWS, Nginx, Cloudflare, etc.
-app.set("trust proxy", true);
+// Trust exactly one proxy hop (Render's load balancer).
+// Using `true` is too permissive — it lets anyone spoof X-Forwarded-For.
+// `1` means: trust only the first upstream proxy, which is safe and correct.
+app.set("trust proxy", 1);
 
 // Request logging (Morgan)
 app.use(logger);

@@ -16,6 +16,7 @@ import { env } from "../config/env.js";
 import { setAuthCookies, setAccessTokenCookie, clearAuthCookies, getRefreshTokenFromCookies } from "../utils/cookies.js";
 import { verify2FACode } from "./twoFactor.controller.js";
 import { parseUserAgent } from "../utils/userAgent.js";
+import { emitSessionRevoked } from "../services/socket.service.js";
 
 // Grace period for token rotation — allows concurrent/delayed requests from mobile browsers
 const TOKEN_ROTATION_GRACE_MS = 60 * 1000; // 60 seconds
@@ -475,6 +476,11 @@ export async function forceLogin(req: Request, res: Response) {
 
     console.log(`🚪 Force login: Invalidated ${invalidatedSessions.count} existing session(s) for ${normalizedEmail}`);
 
+    // Push instant logout to any connected sockets on the old device
+    if (invalidatedSessions.count > 0) {
+      emitSessionRevoked(user.id);
+    }
+
     // Get device info for new session
     const { device, browser, deviceModel, os, osVersion } = parseUserAgent(req.headers["user-agent"]);
     const ipAddress = req.ip || "";
@@ -750,10 +756,13 @@ export async function verify2FALogin(req: Request, res: Response) {
 
     // If force login, invalidate all existing sessions
     if (isForceLogin) {
-      await prisma.session.updateMany({
+      const invalidated = await prisma.session.updateMany({
         where: { userId: user.id, isActive: true },
         data: { isActive: false },
       });
+      if (invalidated.count > 0) {
+        emitSessionRevoked(user.id);
+      }
     } else {
       // Check for existing active sessions (Single-Device Login Security)
       const { device, browser, deviceModel, os, osVersion } = parseUserAgent(req.headers["user-agent"]);
@@ -1432,7 +1441,7 @@ export async function validateSession(req: Request, res: Response) {
       if (graceSession && graceSession.isActive && graceSession.tokenRotatedAt) {
         const elapsed = Date.now() - graceSession.tokenRotatedAt.getTime();
         if (elapsed <= TOKEN_ROTATION_GRACE_MS) {
-          return success(res, { valid: true, checkInterval: 5000 });
+          return success(res, { valid: true, checkInterval: 30000 });
         }
       }
     }
@@ -1443,7 +1452,7 @@ export async function validateSession(req: Request, res: Response) {
 
     return success(res, {
       valid: true,
-      checkInterval: 5000,
+      checkInterval: 30000,
     });
   } catch (err) {
     console.error("validateSession error:", err);
