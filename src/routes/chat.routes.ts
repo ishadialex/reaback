@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { prisma } from "../config/database.js";
-import { sendWhatsAppMessage } from "../services/whatsapp.service.js";
+import { sendWhatsAppMessage, sendWhatsAppImageMessage } from "../services/whatsapp.service.js";
 import { env } from "../config/env.js";
 import { uploadChatImages } from "../middleware/upload.js";
 const router = Router();
@@ -223,21 +223,33 @@ router.post("/message", uploadChatImages, async (req: Request, res: Response) =>
         if (displayPage) infoLines.push(`📄 ${displayPage}`);
         if (displayIp)   infoLines.push(`${await ipFlag(displayIp)} ${displayIp}`);
 
-        const visitorText = contentText
-          ? `👤 ${session.visitorName}: ${contentText}`
-          : `👤 ${session.visitorName}: 📷 *Sent ${imageUrls.length} image(s)*`;
+        // Send text message (even if empty, only when there's actual text or no images)
+        if (contentText || imageUrls.length === 0) {
+          const visitorText = contentText
+            ? `👤 ${session.visitorName}: ${contentText}`
+            : `👤 ${session.visitorName}`;
+          const waText =
+            `💬 *Chat [${shortToken}]*\n` +
+            visitorText +
+            (infoLines.length > 0 ? `\n\n${infoLines.join("\n")}` : "") +
+            `\n\n↩ *Swipe this message to reply*`;
+          for (const jid of adminJids) {
+            await sendWhatsAppMessage(jid, waText);
+          }
+        }
 
-        const imgLines = imageUrls.map((url, i) => `📷 Image ${i + 1}: ${url}`);
-
-        const waText =
-          `💬 *Chat [${shortToken}]*\n` +
-          visitorText +
-          (imgLines.length > 0 ? `\n${imgLines.join("\n")}` : "") +
-          (infoLines.length > 0 ? `\n\n${infoLines.join("\n")}` : "") +
-          `\n\n↩ *Swipe this message to reply*`;
-
-        for (const jid of adminJids) {
-          await sendWhatsAppMessage(jid, waText);
+        // Send each image as a real WhatsApp image (not a text URL)
+        for (let i = 0; i < imageUrls.length; i++) {
+          // First image gets the context caption; subsequent images send bare
+          const caption = i === 0
+            ? `💬 *Chat [${shortToken}]* · 👤 ${session.visitorName}` +
+              (contentText ? `\n${contentText}` : "") +
+              (infoLines.length > 0 ? `\n${infoLines.join(" · ")}` : "") +
+              `\n↩ *Swipe to reply*`
+            : undefined;
+          for (const jid of adminJids) {
+            await sendWhatsAppImageMessage(jid, imageUrls[i], caption);
+          }
         }
       })().catch(() => {});
     }

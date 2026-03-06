@@ -1,13 +1,15 @@
 import { prisma } from "../config/database.js";
 import { env } from "../config/env.js";
-import { emitToTicketRoom, emitToAll, emitToChatSession } from "./socket.service.js";
+import { emitToAll, emitToChatSession } from "./socket.service.js";
 import { useMongoAuthState, clearMongoAuthState } from "./waAuthStore.service.js";
+import { cloudinary } from "../config/cloudinary.js";
 
 // ── State ──────────────────────────────────────────────────────────────────────
 
 let sock: any = null;
 let latestQR: string | null = null;
 let isConnected = false;
+let _downloadMediaMessage: ((msg: any, type: string, options: any) => Promise<Buffer>) | null = null;
 
 // Dedup: skip messages we've already processed (handles Baileys double-fire)
 const processedMsgIds = new Set<string>();
@@ -28,6 +30,32 @@ export async function sendWhatsAppMessage(jid: string, text: string): Promise<vo
   } catch (err) {
     console.error("📱 Failed to send WA message:", err);
   }
+}
+
+export async function sendWhatsAppImageMessage(jid: string, imageUrl: string, caption?: string): Promise<void> {
+  if (!sock || !isConnected) {
+    console.warn("📱 WhatsApp not connected — cannot send image to", jid);
+    return;
+  }
+  try {
+    await sock.sendMessage(jid, { image: { url: imageUrl }, caption: caption ?? "" });
+  } catch (err) {
+    console.error("📱 Failed to send WA image:", err);
+  }
+}
+
+/** Upload a raw buffer to Cloudinary and return the secure URL */
+async function uploadBufferToCloudinary(buffer: Buffer, folder: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { folder, resource_type: "image" },
+      (err, result) => {
+        if (err || !result) return reject(err ?? new Error("Cloudinary upload failed"));
+        resolve(result.secure_url);
+      }
+    );
+    stream.end(buffer);
+  });
 }
 
 // ── Inbound processing (Option 1 — direct, no queue) ──────────────────────────
@@ -151,8 +179,9 @@ async function processInboundMessage(msg: any): Promise<void> {
       data: { updatedAt: new Date() },
     });
 
-    // Push new message to admin panel in real-time (uses your existing Socket.IO)
-    emitToTicketRoom(ticket.id, "support_new_reply", {
+    // Push new message to ALL admin dashboard sockets (not just room members)
+    // so the ticket list updates in real-time even if no admin has that ticket open
+    emitToAll("support_new_reply", {
       ticketId: ticket.id,
       reply: {
         id: newMsg.id,
@@ -170,7 +199,7 @@ async function processInboundMessage(msg: any): Promise<void> {
 
 // ── Admin chat reply (from WhatsApp → chat widget session) ────────────────────
 
-async function processAdminChatReply(shortToken: string, replyText: string): Promise<void> {
+async function processAdminChatReply(shortToken: string, replyText: string, imageBuffers?: Buffer[]): Promise<void> {
   const session = await prisma.chatSession.findFirst({
     where: { sessionToken: { startsWith: shortToken.toLowerCase() } },
   });
@@ -178,17 +207,31 @@ async function processAdminChatReply(shortToken: string, replyText: string): Pro
     console.warn(`💬 processAdminChatReply: no session found for token prefix "${shortToken}"`);
     return;
   }
+
+  // Upload any image buffers to Cloudinary
+  const imageUrls: string[] = [];
+  for (const buf of imageBuffers ?? []) {
+    try {
+      const url = await uploadBufferToCloudinary(buf, "alvarado/chat");
+      imageUrls.push(url);
+    } catch (err) {
+      console.error("💬 Failed to upload WA image to Cloudinary:", err);
+    }
+  }
+
   const adminMsg = await prisma.chatMessage.create({
     data: {
       sessionId: session.id,
       senderType: "admin",
       content: replyText,
+      images: imageUrls,
     },
   });
   emitToChatSession(session.sessionToken, "chat_reply", {
     id: adminMsg.id,
     senderType: "admin",
     content: replyText,
+    images: imageUrls,
     createdAt: adminMsg.createdAt,
   });
   console.log(`💬 Admin reply routed to chat session ${session.sessionToken.slice(0, 8)}…`);
@@ -203,7 +246,8 @@ export async function startWhatsApp(): Promise<void> {
 
     // makeWASocket is a named export in Baileys v6/v7 (not a default export)
     const makeWASocket = baileys.makeWASocket ?? baileys.default?.makeWASocket ?? baileys.default;
-    const { Browsers, fetchLatestBaileysVersion } = baileys;
+    const { Browsers, fetchLatestBaileysVersion, downloadMediaMessage } = baileys;
+    _downloadMediaMessage = downloadMediaMessage ?? null;
 
     if (typeof makeWASocket !== "function") {
       console.error("📱 Failed to load makeWASocket from Baileys. Exports:", Object.keys(baileys));
@@ -340,19 +384,34 @@ export async function startWhatsApp(): Promise<void> {
           continue;
         }
 
+        // ── Helper: download image from an inbound WA message ───────────────
+        const hasImage = !!msg.message?.imageMessage;
+        async function downloadMsgImage(): Promise<Buffer | null> {
+          if (!hasImage || !_downloadMediaMessage) return null;
+          try {
+            return await _downloadMediaMessage(msg, "buffer", {}) as Buffer;
+          } catch {
+            return null;
+          }
+        }
+
         // ── Method 1: Swipe-to-reply (no JID check — token is the auth) ─────
         // Works regardless of @lid vs @s.whatsapp.net JID format
-        const contextInfo = msg.message?.extendedTextMessage?.contextInfo;
+        const contextInfo = (msg.message?.extendedTextMessage?.contextInfo) ??
+          (msg.message?.imageMessage?.contextInfo);
         const quotedText: string =
           contextInfo?.quotedMessage?.conversation ||
           contextInfo?.quotedMessage?.extendedTextMessage?.text ||
           "";
         const quotedTokenMatch = quotedText.match(/\[([A-Za-z0-9]{8})\]/);
 
-        if (quotedTokenMatch && rawText.trim()) {
+        if (quotedTokenMatch && (rawText.trim() || hasImage)) {
           console.log(`💬 Quoted-reply detected (token=${quotedTokenMatch[1]}) jid=${msg.key.remoteJid}`);
           try {
-            await processAdminChatReply(quotedTokenMatch[1], rawText.trim());
+            const imgBufs: Buffer[] = [];
+            const buf = await downloadMsgImage();
+            if (buf) imgBufs.push(buf);
+            await processAdminChatReply(quotedTokenMatch[1], rawText.trim(), imgBufs);
           } catch (err) {
             console.error("💬 processAdminChatReply error:", err);
           }
@@ -367,11 +426,15 @@ export async function startWhatsApp(): Promise<void> {
         const isAdmin = isFromMe || isAdminJid;
 
         if (isAdmin) {
-          const tokenMatch = rawText.match(/^\[([A-Za-z0-9]{8})\]\s*([\s\S]+)/);
+          // Token can appear in text OR in image caption
+          const tokenMatch = rawText.match(/^\[([A-Za-z0-9]{8})\]\s*([\s\S]*)/);
           if (tokenMatch) {
             console.log(`💬 Prefixed admin reply detected (token=${tokenMatch[1]})`);
             try {
-              await processAdminChatReply(tokenMatch[1], tokenMatch[2].trim());
+              const imgBufs: Buffer[] = [];
+              const buf = await downloadMsgImage();
+              if (buf) imgBufs.push(buf);
+              await processAdminChatReply(tokenMatch[1], tokenMatch[2].trim(), imgBufs);
             } catch (err) {
               console.error("💬 processAdminChatReply error:", err);
             }

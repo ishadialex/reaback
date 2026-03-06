@@ -34,10 +34,27 @@ export function initSocket(httpServer: HttpServer): SocketServer {
   });
 
   // JWT authentication middleware for sockets
+  // Accepts: auth.token, Authorization header, or access_token / auth_tokens cookie
   io.use((socket: Socket, next) => {
-    const token =
+    let token: string | undefined =
       socket.handshake.auth?.token ||
       socket.handshake.headers?.authorization?.replace("Bearer ", "");
+
+    // Fallback: parse token from httpOnly cookies sent with socket handshake
+    if (!token) {
+      const cookieHeader = socket.handshake.headers?.cookie ?? "";
+      const parseCookie = (name: string): string | undefined => {
+        const match = cookieHeader.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`));
+        return match ? decodeURIComponent(match[1]) : undefined;
+      };
+      token = parseCookie("access_token");
+      if (!token) {
+        const combined = parseCookie("auth_tokens");
+        if (combined) {
+          try { token = JSON.parse(combined).at; } catch {}
+        }
+      }
+    }
 
     if (!token) {
       return next(new Error("Authentication required"));

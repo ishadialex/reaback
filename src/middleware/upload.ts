@@ -170,3 +170,9 @@ export const uploadChatImages = multer({
   storage: chatStorage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB per image
 }).array("images", 5);
+
+// Up to 5 images per admin support ticket reply
+export const uploadTicketReplyImages = multer({
+  storage: attachmentStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB per image
+}).array("images", 5);

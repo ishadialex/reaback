@@ -3,7 +3,7 @@ import { prisma } from "../../config/database.js";
 import { success, error } from "../../utils/response.js";
 import { createInAppNotification } from "../../services/notification.service.js";
 import { emitToTicketRoom, emitToUser } from "../../services/socket.service.js";
-import { sendWhatsAppMessage } from "../../services/whatsapp.service.js";
+import { sendWhatsAppMessage, sendWhatsAppImageMessage } from "../../services/whatsapp.service.js";
 
 // GET /api/admin/support
 export async function listTickets(req: Request, res: Response) {
@@ -111,6 +111,7 @@ export async function getTicket(req: Request, res: Response) {
             ? "Support Team"
             : `${msg.sender?.firstName ?? ""} ${msg.sender?.lastName ?? ""}`.trim(),
         createdAt: msg.createdAt,
+        images: msg.attachments.map((a) => a.url),
       })),
     });
   } catch (err) {
@@ -119,14 +120,18 @@ export async function getTicket(req: Request, res: Response) {
   }
 }
 
-// POST /api/admin/support/:id/reply
+// POST /api/admin/support/:id/reply  (multipart/form-data: message?, images[])
 export async function replyTicket(req: Request, res: Response) {
   try {
     const adminId = req.userId!;
     const id = req.params.id as string;
-    const message = req.body.message as string;
+    const message = (req.body.message as string | undefined) ?? "";
+    const files = req.files as Express.Multer.File[];
+    const imageUrls: string[] = files?.map((f: any) => f.path) ?? [];
 
-    if (!message?.trim()) return error(res, "Message is required", 400);
+    if (!message.trim() && imageUrls.length === 0) {
+      return error(res, "Message or at least one image is required", 400);
+    }
 
     const ticket = await prisma.supportTicket.findUnique({ where: { id } });
     if (!ticket) return error(res, "Ticket not found", 404);
@@ -139,6 +144,21 @@ export async function replyTicket(req: Request, res: Response) {
         message: message.trim(),
       },
     });
+
+    // Persist each image as a FileAttachment linked to this message
+    if (imageUrls.length > 0) {
+      await prisma.fileAttachment.createMany({
+        data: imageUrls.map((url, i) => ({
+          messageId: ticketMessage.id,
+          userId: adminId,
+          name: `image-${i + 1}`,
+          size: files[i]?.size ?? 0,
+          type: files[i]?.mimetype ?? "image/jpeg",
+          url,
+          context: "support",
+        })),
+      });
+    }
 
     // Bump updatedAt and set status to "in_progress" if it was "open"
     await prisma.supportTicket.update({
@@ -155,6 +175,7 @@ export async function replyTicket(req: Request, res: Response) {
       isStaff: true,
       authorName: "Support Team",
       createdAt: ticketMessage.createdAt,
+      images: imageUrls,
     };
 
     // Real-time: push reply to everyone viewing this ticket (user + admin)
@@ -164,9 +185,17 @@ export async function replyTicket(req: Request, res: Response) {
     const newStatus = ticket.status === "open" ? "in_progress" : ticket.status;
     emitToTicketRoom(id, "ticket_status_changed", { ticketId: id, status: newStatus });
 
-    // If ticket came via WhatsApp, send the reply back to the user's WA number
+    // If ticket came via WhatsApp, send text + images to the user's WA number
     if (ticket.whatsappJid) {
-      sendWhatsAppMessage(ticket.whatsappJid, `Support Team: ${message.trim()}`).catch(() => {});
+      (async () => {
+        if (message.trim()) {
+          await sendWhatsAppMessage(ticket.whatsappJid!, `Support Team: ${message.trim()}`);
+        }
+        for (let i = 0; i < imageUrls.length; i++) {
+          const caption = i === 0 && !message.trim() ? "Support Team:" : undefined;
+          await sendWhatsAppImageMessage(ticket.whatsappJid!, imageUrls[i], caption);
+        }
+      })().catch(() => {});
     }
 
     // Push notification to the user (even if they're not in the ticket room)
