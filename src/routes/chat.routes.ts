@@ -83,11 +83,13 @@ router.post("/visit", async (req: Request, res: Response) => {
 
     const adminJids = (env.ADMIN_WA_JID || "").split(",").map((j) => j.trim()).filter(Boolean);
     if (adminJids.length > 0) {
-      const shortToken = sessionToken.slice(0, 8).toUpperCase();
-      const waText = `👀 *New Visitor* [${shortToken}]\n📄 ${page}\n${await ipFlag(visitorIp)} ${visitorIp || "unknown"}`;
-      for (const jid of adminJids) {
-        sendWhatsAppMessage(jid, waText).catch(() => {});
-      }
+      (async () => {
+        const shortToken = sessionToken.slice(0, 8).toUpperCase();
+        const waText = `👀 *New Visitor* [${shortToken}]\n📄 ${page}\n${await ipFlag(visitorIp)} ${visitorIp || "unknown"}`;
+        for (const jid of adminJids) {
+          await sendWhatsAppMessage(jid, waText);
+        }
+      })().catch(() => {});
     }
   } catch {
     // silent — never break the page load
@@ -206,36 +208,39 @@ router.post("/message", uploadChatImages, async (req: Request, res: Response) =>
       },
     });
 
-    // Forward to admin WhatsApp
+    // Respond to visitor immediately — don't block on WA notification
+    res.json({ success: true, data: msg });
+
+    // Forward to admin WhatsApp in the background (fire-and-forget)
     const adminJids = (env.ADMIN_WA_JID || "").split(",").map((j) => j.trim()).filter(Boolean);
     if (adminJids.length > 0) {
-      const shortToken = sessionToken.slice(0, 8).toUpperCase();
-      const displayPage = currentPage || session.currentPage;
-      const displayIp = visitorIp || session.visitorIp;
+      (async () => {
+        const shortToken = sessionToken.slice(0, 8).toUpperCase();
+        const displayPage = currentPage || session.currentPage;
+        const displayIp = visitorIp || session.visitorIp;
 
-      const infoLines: string[] = [];
-      if (displayPage) infoLines.push(`📄 ${displayPage}`);
-      if (displayIp)   infoLines.push(`${await ipFlag(displayIp)} ${displayIp}`);
+        const infoLines: string[] = [];
+        if (displayPage) infoLines.push(`📄 ${displayPage}`);
+        if (displayIp)   infoLines.push(`${await ipFlag(displayIp)} ${displayIp}`);
 
-      const visitorText = contentText
-        ? `👤 ${session.visitorName}: ${contentText}`
-        : `👤 ${session.visitorName}: 📷 *Sent ${imageUrls.length} image(s)*`;
+        const visitorText = contentText
+          ? `👤 ${session.visitorName}: ${contentText}`
+          : `👤 ${session.visitorName}: 📷 *Sent ${imageUrls.length} image(s)*`;
 
-      const imgLines = imageUrls.map((url, i) => `📷 Image ${i + 1}: ${url}`);
+        const imgLines = imageUrls.map((url, i) => `📷 Image ${i + 1}: ${url}`);
 
-      const waText =
-        `💬 *Chat [${shortToken}]*\n` +
-        visitorText +
-        (imgLines.length > 0 ? `\n${imgLines.join("\n")}` : "") +
-        (infoLines.length > 0 ? `\n\n${infoLines.join("\n")}` : "") +
-        `\n\n↩ *Swipe this message to reply*`;
+        const waText =
+          `💬 *Chat [${shortToken}]*\n` +
+          visitorText +
+          (imgLines.length > 0 ? `\n${imgLines.join("\n")}` : "") +
+          (infoLines.length > 0 ? `\n\n${infoLines.join("\n")}` : "") +
+          `\n\n↩ *Swipe this message to reply*`;
 
-      for (const jid of adminJids) {
-        await sendWhatsAppMessage(jid, waText);
-      }
+        for (const jid of adminJids) {
+          await sendWhatsAppMessage(jid, waText);
+        }
+      })().catch(() => {});
     }
-
-    return res.json({ success: true, data: msg });
   } catch (err) {
     console.error("chat/message error:", err);
     return res.status(500).json({ success: false, message: "Server error" });
