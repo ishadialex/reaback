@@ -3,8 +3,6 @@ import { prisma } from "../config/database.js";
 import { sendWhatsAppMessage } from "../services/whatsapp.service.js";
 import { env } from "../config/env.js";
 import { uploadChatImages } from "../middleware/upload.js";
-import geoip from "geoip-lite";
-
 const router = Router();
 
 function getVisitorIp(req: Request): string {
@@ -16,17 +14,34 @@ function getVisitorIp(req: Request): string {
   );
 }
 
-/** Returns a flag emoji + country code for an IP, e.g. "🇳🇬 NG" — falls back to 🌐 */
-function ipFlag(ip: string): string {
+/** In-memory cache so the same IP is never looked up twice in a 24h window */
+const _ipFlagCache = new Map<string, { result: string; expires: number }>();
+
+/** Returns a flag emoji + country code for an IP via ip-api.com, e.g. "🇳🇬 NG" */
+async function ipFlag(ip: string): Promise<string> {
   if (!ip) return "🌐";
-  const geo = geoip.lookup(ip);
-  if (!geo?.country) return "🌐";
-  const flag = geo.country
-    .toUpperCase()
-    .split("")
-    .map((c) => String.fromCodePoint(0x1f1e6 + c.charCodeAt(0) - 65))
-    .join("");
-  return `${flag} ${geo.country}`;
+  // Skip private / loopback IPs
+  if (ip === "::1" || /^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip)) return "🏠";
+
+  const cached = _ipFlagCache.get(ip);
+  if (cached && cached.expires > Date.now()) return cached.result;
+
+  try {
+    const res = await fetch(`http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,countryCode`);
+    const data = await res.json() as { status: string; countryCode?: string };
+    if (data.status === "success" && data.countryCode) {
+      const flag = data.countryCode
+        .toUpperCase()
+        .split("")
+        .map((c) => String.fromCodePoint(0x1f1e6 + c.charCodeAt(0) - 65))
+        .join("");
+      const result = `${flag} ${data.countryCode}`;
+      _ipFlagCache.set(ip, { result, expires: Date.now() + 24 * 60 * 60 * 1000 });
+      return result;
+    }
+  } catch {}
+
+  return "🌐";
 }
 
 // ── GET /api/chat/status ─────────────────────────────────────────────────────
@@ -69,7 +84,7 @@ router.post("/visit", async (req: Request, res: Response) => {
     const adminJids = (env.ADMIN_WA_JID || "").split(",").map((j) => j.trim()).filter(Boolean);
     if (adminJids.length > 0) {
       const shortToken = sessionToken.slice(0, 8).toUpperCase();
-      const waText = `👀 *New Visitor* [${shortToken}]\n📄 ${page}\n${ipFlag(visitorIp)} ${visitorIp || "unknown"}`;
+      const waText = `👀 *New Visitor* [${shortToken}]\n📄 ${page}\n${await ipFlag(visitorIp)} ${visitorIp || "unknown"}`;
       for (const jid of adminJids) {
         sendWhatsAppMessage(jid, waText).catch(() => {});
       }
@@ -200,7 +215,7 @@ router.post("/message", uploadChatImages, async (req: Request, res: Response) =>
 
       const infoLines: string[] = [];
       if (displayPage) infoLines.push(`📄 ${displayPage}`);
-      if (displayIp)   infoLines.push(`${ipFlag(displayIp)} ${displayIp}`);
+      if (displayIp)   infoLines.push(`${await ipFlag(displayIp)} ${displayIp}`);
 
       const visitorText = contentText
         ? `👤 ${session.visitorName}: ${contentText}`
