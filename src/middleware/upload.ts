@@ -153,3 +153,20 @@ export const uploadForumImages = multer({
   storage: forumStorage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB per image
 }).array("images", 5);
+
+const chatStorage = isCloudinaryConfigured
+  ? new CloudinaryStorage({
+      cloudinary,
+      params: {
+        folder: "alvarado/chat",
+        allowed_formats: ["jpg", "jpeg", "png", "gif", "webp"],
+        transformation: [{ width: 1600, height: 1600, crop: "limit" }],
+      } as any,
+    })
+  : multer.memoryStorage();
+
+// Up to 5 images per chat message
+export const uploadChatImages = multer({
+  storage: chatStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB per image
+}).array("images", 5);

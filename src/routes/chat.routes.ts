@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { prisma } from "../config/database.js";
 import { sendWhatsAppMessage } from "../services/whatsapp.service.js";
 import { env } from "../config/env.js";
+import { uploadChatImages } from "../middleware/upload.js";
 
 const router = Router();
 
@@ -127,8 +128,9 @@ router.get("/history/:token", async (req: Request, res: Response) => {
 });
 
 // ── POST /api/chat/message ──────────────────────────────────────────────────
-// Body: { sessionToken, content, visitorName?, currentPage? }
-router.post("/message", async (req: Request, res: Response) => {
+// Accepts multipart/form-data (with optional images) OR JSON (text-only).
+// Fields: sessionToken, content?, visitorName?, currentPage?, images[] (files)
+router.post("/message", uploadChatImages, async (req: Request, res: Response) => {
   const { sessionToken, content, visitorName, currentPage } = req.body as {
     sessionToken?: string;
     content?: string;
@@ -136,8 +138,12 @@ router.post("/message", async (req: Request, res: Response) => {
     currentPage?: string;
   };
 
-  if (!sessionToken || !content?.trim()) {
-    return res.status(400).json({ success: false, message: "sessionToken and content required" });
+  const files = req.files as Express.Multer.File[];
+  const imageUrls: string[] = files?.map((f: any) => f.path) ?? [];
+  const contentText = (content ?? "").trim();
+
+  if (!sessionToken || (!contentText && imageUrls.length === 0)) {
+    return res.status(400).json({ success: false, message: "sessionToken and content or image required" });
   }
 
   const visitorIp = getVisitorIp(req);
@@ -166,7 +172,8 @@ router.post("/message", async (req: Request, res: Response) => {
       data: {
         sessionId: session.id,
         senderType: "visitor",
-        content: content.trim(),
+        content: contentText,
+        images: imageUrls,
       },
     });
 
@@ -181,9 +188,16 @@ router.post("/message", async (req: Request, res: Response) => {
       if (displayPage) infoLines.push(`📄 ${displayPage}`);
       if (displayIp)   infoLines.push(`🌐 ${displayIp}`);
 
+      const visitorText = contentText
+        ? `👤 ${session.visitorName}: ${contentText}`
+        : `👤 ${session.visitorName}: 📷 *Sent ${imageUrls.length} image(s)*`;
+
+      const imgLines = imageUrls.map((url, i) => `📷 Image ${i + 1}: ${url}`);
+
       const waText =
         `💬 *Chat [${shortToken}]*\n` +
-        `👤 ${session.visitorName}: ${content.trim()}` +
+        visitorText +
+        (imgLines.length > 0 ? `\n${imgLines.join("\n")}` : "") +
         (infoLines.length > 0 ? `\n\n${infoLines.join("\n")}` : "") +
         `\n\n↩ *Swipe this message to reply*`;
 

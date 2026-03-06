@@ -684,6 +684,7 @@ model ChatMessage {
   session     ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   senderType  String      // "visitor" | "admin"
   content     String
+  images      String[]    // Cloudinary URLs for image attachments
   createdAt   DateTime    @default(now())
 
   @@index([sessionId])
