@@ -3,6 +3,7 @@ import { prisma } from "../../config/database.js";
 import { success, error } from "../../utils/response.js";
 import { createInAppNotification } from "../../services/notification.service.js";
 import { emitToTicketRoom, emitToUser } from "../../services/socket.service.js";
+import { sendWhatsAppMessage } from "../../services/whatsapp.service.js";
 
 // GET /api/admin/support
 export async function listTickets(req: Request, res: Response) {
@@ -44,7 +45,7 @@ export async function listTickets(req: Request, res: Response) {
       prisma.supportTicket.count({ where }),
     ]);
 
-    const formatted = tickets.map((t) => ({
+    const formatted = tickets.map((t: any) => ({
       id: t.id,
       subject: t.subject,
       category: t.category,
@@ -55,6 +56,7 @@ export async function listTickets(req: Request, res: Response) {
       user: t.user,
       firstMessage: t.messages[0]?.message || "",
       messageCount: t._count.messages,
+      whatsappPhone: t.whatsappPhone ?? null,
     }));
 
     return success(res, { tickets: formatted, total, page: parseInt(page), limit: parseInt(limit) });
@@ -98,6 +100,7 @@ export async function getTicket(req: Request, res: Response) {
       createdAt: ticket.createdAt,
       updatedAt: ticket.updatedAt,
       user: ticket.user,
+      whatsappPhone: (ticket as any).whatsappPhone ?? null,
       message: firstMessage?.message || "",
       replies: replyMessages.map((msg) => ({
         id: msg.id,
@@ -161,20 +164,27 @@ export async function replyTicket(req: Request, res: Response) {
     const newStatus = ticket.status === "open" ? "in_progress" : ticket.status;
     emitToTicketRoom(id, "ticket_status_changed", { ticketId: id, status: newStatus });
 
+    // If ticket came via WhatsApp, send the reply back to the user's WA number
+    if (ticket.whatsappJid) {
+      sendWhatsAppMessage(ticket.whatsappJid, `Support Team: ${message.trim()}`).catch(() => {});
+    }
+
     // Push notification to the user (even if they're not in the ticket room)
-    emitToUser(ticket.userId, "notification", {
+    if (ticket.userId) emitToUser(ticket.userId, "notification", {
       type: "support",
       title: "Support Team Replied",
       message: `Your ticket "${ticket.subject}" has a new reply.`,
       createdAt: new Date().toISOString(),
       isRead: false,
     });
-    createInAppNotification(
-      ticket.userId,
-      "support",
-      "Support Team Replied",
-      `Your ticket "${ticket.subject}" has a new reply from the support team.`
-    ).catch(() => {});
+    if (ticket.userId) {
+      createInAppNotification(
+        ticket.userId,
+        "support",
+        "Support Team Replied",
+        `Your ticket "${ticket.subject}" has a new reply from the support team.`
+      ).catch(() => {});
+    }
 
     return success(res, replyPayload, "Reply sent", 201);
   } catch (err) {
@@ -213,20 +223,22 @@ export async function updateTicketStatus(req: Request, res: Response) {
     // Real-time: notify everyone in the ticket room of the status change
     emitToTicketRoom(id, "ticket_status_changed", { ticketId: id, status });
 
-    // Push notification to user
-    emitToUser(ticket.userId, "notification", {
-      type: "support",
-      title: "Ticket Status Updated",
-      message: `Your ticket "${ticket.subject}" is now ${statusLabel[status] ?? status}.`,
-      createdAt: new Date().toISOString(),
-      isRead: false,
-    });
-    createInAppNotification(
-      ticket.userId,
-      "support",
-      "Ticket Status Updated",
-      `Your ticket "${ticket.subject}" status changed to ${statusLabel[status] ?? status}.`
-    ).catch(() => {});
+    // Push notification to user (not applicable for WA-only tickets)
+    if (ticket.userId) {
+      emitToUser(ticket.userId, "notification", {
+        type: "support",
+        title: "Ticket Status Updated",
+        message: `Your ticket "${ticket.subject}" is now ${statusLabel[status] ?? status}.`,
+        createdAt: new Date().toISOString(),
+        isRead: false,
+      });
+      createInAppNotification(
+        ticket.userId,
+        "support",
+        "Ticket Status Updated",
+        `Your ticket "${ticket.subject}" status changed to ${statusLabel[status] ?? status}.`
+      ).catch(() => {});
+    }
 
     return success(res, updated, "Status updated");
   } catch (err) {

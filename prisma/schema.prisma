@@ -221,28 +221,31 @@ model UserSettings {
 // ──────────────────────────────────────────────
 
 model SupportTicket {
-  id        String          @id @default(auto()) @map("_id") @db.ObjectId
-  userId    String          @db.ObjectId
-  user      User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subject   String
-  category  String
-  priority  String          @default("medium") // low | medium | high | urgent
-  status    String          @default("open")   // open | in_progress | resolved | closed
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
-  messages  TicketMessage[]
+  id            String          @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String?         @db.ObjectId
+  user          User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject       String
+  category      String
+  priority      String          @default("medium") // low | medium | high | urgent
+  status        String          @default("open")   // open | in_progress | resolved | closed
+  whatsappJid   String?                            // Baileys JID e.g. "2348012345678@s.whatsapp.net"
+  whatsappPhone String?                            // Human-readable e.g. "+2348012345678"
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  messages      TicketMessage[]
 }
 
 model TicketMessage {
-  id          String           @id @default(auto()) @map("_id") @db.ObjectId
-  ticketId    String           @db.ObjectId
-  ticket      SupportTicket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  senderId    String           @db.ObjectId
-  sender      User?            @relation(fields: [senderId], references: [id], onDelete: Cascade)
-  senderType  String           @default("user") // user | admin
-  message     String
-  createdAt   DateTime         @default(now())
-  attachments FileAttachment[]
+  id            String           @id @default(auto()) @map("_id") @db.ObjectId
+  ticketId      String           @db.ObjectId
+  ticket        SupportTicket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  senderId      String?          @db.ObjectId
+  sender        User?            @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  senderType    String           @default("user") // user | admin
+  message       String
+  whatsappMsgId String?                           // Baileys msg ID — deduplication
+  createdAt     DateTime         @default(now())
+  attachments   FileAttachment[]
 }
 
 model FileAttachment {
@@ -652,6 +655,40 @@ model NewsletterSubscriber {
 
   @@index([isSubscribed])
 }
+// ──────────────────────────────────────────────
+// Live Chat (Website Widget ↔ Admin WhatsApp)
+// ──────────────────────────────────────────────
+
+model ChatConfig {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  isOnline  Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+}
+
+model ChatSession {
+  id           String        @id @default(auto()) @map("_id") @db.ObjectId
+  sessionToken String        @unique
+  visitorName  String        @default("Visitor")
+  currentPage  String        @default("")
+  visitorIp    String        @default("")
+  userAgent    String        @default("")
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  messages     ChatMessage[]
+}
+
+model ChatMessage {
+  id          String      @id @default(auto()) @map("_id") @db.ObjectId
+  sessionId   String      @db.ObjectId
+  session     ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  senderType  String      // "visitor" | "admin"
+  content     String
+  createdAt   DateTime    @default(now())
+
+  @@index([sessionId])
+}
+
 // ──────────────────────────────────────────────
 // KYC (Know Your Customer)
 // ──────────────────────────────────────────────

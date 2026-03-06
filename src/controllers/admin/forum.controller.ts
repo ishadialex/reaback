@@ -33,7 +33,7 @@ export async function adminListPosts(req: Request, res: Response) {
 export async function adminEditPost(req: Request, res: Response) {
   const { title, content, createdAt, updatedAt } = req.body;
 
-  const post = await prisma.forumPost.findUnique({ where: { id: req.params.id } });
+  const post = await prisma.forumPost.findUnique({ where: { id: req.params.id as string } });
   if (!post) return error(res, "Post not found", 404);
 
   const hasDateOverride = createdAt || updatedAt;
@@ -69,7 +69,7 @@ export async function adminEditPost(req: Request, res: Response) {
 
 // DELETE /api/admin/forum/posts/:id — hard delete post + all its comments/likes
 export async function adminDeletePost(req: Request, res: Response) {
-  const post = await prisma.forumPost.findUnique({ where: { id: req.params.id } });
+  const post = await prisma.forumPost.findUnique({ where: { id: req.params.id as string } });
   if (!post) return error(res, "Post not found", 404);
 
   await prisma.forumPost.delete({ where: { id: post.id } });
@@ -78,11 +78,12 @@ export async function adminDeletePost(req: Request, res: Response) {
 
 // GET /api/admin/forum/posts/:id/comments — list all comments + replies for a post
 export async function adminGetPostComments(req: Request, res: Response) {
-  const post = await prisma.forumPost.findUnique({ where: { id: req.params.id } });
+  const id = req.params.id as string;
+  const post = await prisma.forumPost.findUnique({ where: { id } });
   if (!post) return error(res, "Post not found", 404);
 
   const comments = await prisma.forumComment.findMany({
-    where: { postId: req.params.id },
+    where: { postId: id },
     orderBy: { createdAt: "asc" },
     include: { author: { select: AUTHOR_SELECT } },
   });
@@ -94,7 +95,7 @@ export async function adminGetPostComments(req: Request, res: Response) {
 export async function adminEditComment(req: Request, res: Response) {
   const { content, createdAt, updatedAt } = req.body;
 
-  const comment = await prisma.forumComment.findUnique({ where: { id: req.params.id } });
+  const comment = await prisma.forumComment.findUnique({ where: { id: req.params.id as string } });
   if (!comment) return error(res, "Comment not found", 404);
 
   const hasDateOverride = createdAt || updatedAt;
@@ -125,7 +126,7 @@ export async function adminEditComment(req: Request, res: Response) {
 
 // DELETE /api/admin/forum/comments/:id — hard delete comment/reply
 export async function adminDeleteComment(req: Request, res: Response) {
-  const comment = await prisma.forumComment.findUnique({ where: { id: req.params.id } });
+  const comment = await prisma.forumComment.findUnique({ where: { id: req.params.id as string } });
   if (!comment) return error(res, "Comment not found", 404);
 
   await prisma.forumComment.delete({ where: { id: comment.id } });
@@ -141,7 +142,7 @@ export async function adminDeleteComment(req: Request, res: Response) {
 
 // PATCH /api/admin/forum/posts/:id/pin — toggle pin
 export async function pinPost(req: Request, res: Response) {
-  const post = await prisma.forumPost.findUnique({ where: { id: req.params.id } });
+  const post = await prisma.forumPost.findUnique({ where: { id: req.params.id as string } });
   if (!post) return error(res, "Post not found", 404);
 
   const updated = await prisma.forumPost.update({

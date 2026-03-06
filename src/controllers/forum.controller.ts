@@ -58,7 +58,7 @@ export async function listPosts(req: Request, res: Response) {
 // GET /api/forum/posts/:id?page=1&limit=20
 export async function getPost(req: Request, res: Response) {
   const post = await prisma.forumPost.findFirst({
-    where: { id: req.params.id, isDeleted: false },
+    where: { id: req.params.id as string, isDeleted: false },
     include: { author: { select: AUTHOR_SELECT } },
   });
 
@@ -140,13 +140,13 @@ export async function createPost(req: Request, res: Response) {
     include: { author: { select: AUTHOR_SELECT } },
   });
 
-  return success(res, { post }, 201);
+  return success(res, { post }, undefined, 201);
 }
 
 // PATCH /api/forum/posts/:id
 export async function updatePost(req: Request, res: Response) {
   const post = await prisma.forumPost.findFirst({
-    where: { id: req.params.id, isDeleted: false },
+    where: { id: req.params.id as string, isDeleted: false },
   });
   if (!post) return error(res, "Post not found", 404);
   if (post.authorId !== req.userId) return error(res, "You can only edit your own posts", 403);
@@ -171,7 +171,7 @@ export async function updatePost(req: Request, res: Response) {
 // DELETE /api/forum/posts/:id
 export async function deletePost(req: Request, res: Response) {
   const post = await prisma.forumPost.findFirst({
-    where: { id: req.params.id, isDeleted: false },
+    where: { id: req.params.id as string, isDeleted: false },
   });
   if (!post) return error(res, "Post not found", 404);
   if (post.authorId !== req.userId) return error(res, "You can only delete your own posts", 403);
@@ -189,7 +189,7 @@ export async function createComment(req: Request, res: Response) {
   const { content } = req.body;
   if (!content?.trim()) return error(res, "Content is required", 400);
 
-  const post = await prisma.forumPost.findFirst({ where: { id: req.params.id, isDeleted: false } });
+  const post = await prisma.forumPost.findFirst({ where: { id: req.params.id as string, isDeleted: false } });
   if (!post) return error(res, "Post not found", 404);
 
   const files = req.files as Express.Multer.File[];
@@ -211,7 +211,7 @@ export async function createComment(req: Request, res: Response) {
     data: { commentsCount: { increment: 1 }, lastCommentAt: new Date() },
   });
 
-  return success(res, { comment }, 201);
+  return success(res, { comment }, undefined, 201);
 }
 
 // GET /api/forum/comments/:id/replies?page=1&limit=20
@@ -222,13 +222,13 @@ export async function getReplies(req: Request, res: Response) {
 
   const [replies, total] = await Promise.all([
     prisma.forumComment.findMany({
-      where: { parentId: req.params.id, isDeleted: false },
+      where: { parentId: req.params.id as string, isDeleted: false },
       orderBy: { createdAt: "asc" },
       skip,
       take: limit,
       include: { author: { select: AUTHOR_SELECT } },
     }),
-    prisma.forumComment.count({ where: { parentId: req.params.id, isDeleted: false } }),
+    prisma.forumComment.count({ where: { parentId: req.params.id as string, isDeleted: false } }),
   ]);
 
   return success(res, { replies, total, page, pages: Math.ceil(total / limit) });
@@ -241,7 +241,7 @@ export async function createReply(req: Request, res: Response) {
   if (!content?.trim()) return error(res, "Content is required", 400);
 
   const targetComment = await prisma.forumComment.findFirst({
-    where: { id: req.params.id, isDeleted: false },
+    where: { id: req.params.id as string, isDeleted: false },
     include: { author: { select: { firstName: true, lastName: true } } },
   });
   if (!targetComment) return error(res, "Comment not found", 404);
@@ -270,13 +270,13 @@ export async function createReply(req: Request, res: Response) {
     data: { commentsCount: { increment: 1 }, lastCommentAt: new Date() },
   });
 
-  return success(res, { reply }, 201);
+  return success(res, { reply }, undefined, 201);
 }
 
 // PATCH /api/forum/comments/:id
 export async function updateComment(req: Request, res: Response) {
   const comment = await prisma.forumComment.findFirst({
-    where: { id: req.params.id, isDeleted: false },
+    where: { id: req.params.id as string, isDeleted: false },
   });
   if (!comment) return error(res, "Comment not found", 404);
   if (comment.authorId !== req.userId) return error(res, "You can only edit your own comments", 403);
@@ -300,7 +300,7 @@ export async function updateComment(req: Request, res: Response) {
 // DELETE /api/forum/comments/:id
 export async function deleteComment(req: Request, res: Response) {
   const comment = await prisma.forumComment.findFirst({
-    where: { id: req.params.id, isDeleted: false },
+    where: { id: req.params.id as string, isDeleted: false },
   });
   if (!comment) return error(res, "Comment not found", 404);
   if (comment.authorId !== req.userId) return error(res, "You can only delete your own comments", 403);
@@ -320,7 +320,7 @@ export async function deleteComment(req: Request, res: Response) {
 
 // POST /api/forum/posts/:id/like  — toggle
 export async function togglePostLike(req: Request, res: Response) {
-  const post = await prisma.forumPost.findFirst({ where: { id: req.params.id, isDeleted: false } });
+  const post = await prisma.forumPost.findFirst({ where: { id: req.params.id as string, isDeleted: false } });
   if (!post) return error(res, "Post not found", 404);
 
   const existing = await prisma.forumLike.findFirst({
@@ -340,7 +340,7 @@ export async function togglePostLike(req: Request, res: Response) {
 
 // POST /api/forum/comments/:id/like  — toggle
 export async function toggleCommentLike(req: Request, res: Response) {
-  const comment = await prisma.forumComment.findFirst({ where: { id: req.params.id, isDeleted: false } });
+  const comment = await prisma.forumComment.findFirst({ where: { id: req.params.id as string, isDeleted: false } });
   if (!comment) return error(res, "Comment not found", 404);
 
   const existing = await prisma.forumLike.findFirst({

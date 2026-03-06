@@ -35,9 +35,12 @@ import adminDocumentsRoutes from "./admin/documents.routes.js";
 import adminSupportRoutes from "./admin/support.routes.js";
 import adminForumRoutes from "./admin/forum.routes.js";
 import adminReviewsRoutes from "./admin/reviews.routes.js";
+import adminWhatsappRoutes from "./admin/whatsapp.routes.js";
+import adminChatRoutes from "./admin/chat.routes.js";
 import documentsRoutes from "./documents.routes.js";
 import kycRoutes from "./kyc.routes.js";
 import forumRoutes from "./forum.routes.js";
+import chatRoutes from "./chat.routes.js";
 
 const router = Router();
 
@@ -45,6 +48,7 @@ const router = Router();
 router.use("/", monitorRoutes);
 
 // Public routes (no auth)
+router.use("/chat", publicLimiter, chatRoutes);
 router.use("/public", publicLimiter, publicRoutes);
 router.use("/pdf", publicLimiter, pdfRoutes);
 router.use("/newsletter", publicLimiter, newsletterRoutes);
@@ -88,5 +92,7 @@ router.use("/admin/documents", adminDocumentsRoutes);
 router.use("/admin/support", adminSupportRoutes);
 router.use("/admin/forum", adminForumRoutes);
 router.use("/admin/reviews", adminReviewsRoutes);
+router.use("/admin/whatsapp", adminWhatsappRoutes);
+router.use("/admin/chat", adminChatRoutes);
 
 export default router;

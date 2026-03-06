@@ -82,6 +82,21 @@ export function initSocket(httpServer: HttpServer): SocketServer {
     });
   });
 
+  // ── /chat namespace — no JWT, used by the public website chat widget ──────
+  const chatNs = io.of("/chat");
+  chatNs.on("connection", (socket) => {
+    const sessionToken = socket.handshake.auth?.sessionToken as string | undefined;
+    if (!sessionToken) {
+      socket.disconnect();
+      return;
+    }
+    socket.join(`chat:${sessionToken}`);
+    console.log(`💬 Chat widget connected: session ${sessionToken.slice(0, 8)}…`);
+    socket.on("disconnect", () => {
+      console.log(`💬 Chat widget disconnected: session ${sessionToken.slice(0, 8)}…`);
+    });
+  });
+
   return io;
 }
 
@@ -118,4 +133,20 @@ export function emitToUser(
  */
 export function emitSessionRevoked(userId: string): void {
   emitToUser(userId, "session_revoked", {});
+}
+
+/**
+ * Broadcast an event to every connected socket (used for admin notifications like new WA tickets)
+ */
+export function emitToAll(event: string, data: unknown): void {
+  if (!io) return;
+  io.emit(event, data);
+}
+
+/**
+ * Push an event directly into a website chat session room (used when admin replies via WhatsApp)
+ */
+export function emitToChatSession(sessionToken: string, event: string, data: unknown): void {
+  if (!io) return;
+  io.of("/chat").to(`chat:${sessionToken}`).emit(event, data);
 }

@@ -3,6 +3,7 @@ import app from "./app.js";
 import { env } from "./config/env.js";
 import { prisma } from "./config/database.js";
 import { initSocket } from "./services/socket.service.js";
+import { startWhatsApp } from "./services/whatsapp.service.js";
 
 const PORT = env.PORT;
 
@@ -17,6 +18,9 @@ async function startServer() {
 
     // Attach Socket.io to the HTTP server
     initSocket(httpServer);
+
+    // Start WhatsApp integration (non-blocking — prints QR in terminal)
+    startWhatsApp().catch(console.error);
 
     httpServer.listen(PORT, () => {
       console.log(`\n🚀 Server running on http://localhost:${PORT}`);

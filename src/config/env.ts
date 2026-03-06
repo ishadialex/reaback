@@ -39,6 +39,8 @@ const envSchema = z.object({
   PDF_ACCESS_PASSCODES: z.string().min(1).optional(),
   // PDF Token Expiry (e.g., "1h", "30m", "2h")
   PDF_TOKEN_EXPIRY: z.string().default("1h"),
+  // WhatsApp admin JID (e.g. "2348012345678@s.whatsapp.net") — replies here are routed to chat widget
+  ADMIN_WA_JID: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);
