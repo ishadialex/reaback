@@ -3,6 +3,7 @@ import { prisma } from "../config/database.js";
 import { sendWhatsAppMessage } from "../services/whatsapp.service.js";
 import { env } from "../config/env.js";
 import { uploadChatImages } from "../middleware/upload.js";
+import geoip from "geoip-lite";
 
 const router = Router();
 
@@ -13,6 +14,19 @@ function getVisitorIp(req: Request): string {
     req.socket?.remoteAddress ||
     ""
   );
+}
+
+/** Returns a flag emoji + country code for an IP, e.g. "🇳🇬 NG" — falls back to 🌐 */
+function ipFlag(ip: string): string {
+  if (!ip) return "🌐";
+  const geo = geoip.lookup(ip);
+  if (!geo?.country) return "🌐";
+  const flag = geo.country
+    .toUpperCase()
+    .split("")
+    .map((c) => String.fromCodePoint(0x1f1e6 + c.charCodeAt(0) - 65))
+    .join("");
+  return `${flag} ${geo.country}`;
 }
 
 // ── GET /api/chat/status ─────────────────────────────────────────────────────
@@ -55,7 +69,7 @@ router.post("/visit", async (req: Request, res: Response) => {
     const adminJids = (env.ADMIN_WA_JID || "").split(",").map((j) => j.trim()).filter(Boolean);
     if (adminJids.length > 0) {
       const shortToken = sessionToken.slice(0, 8).toUpperCase();
-      const waText = `👀 *New Visitor* [${shortToken}]\n📄 ${page}\n🌐 ${visitorIp || "unknown"}`;
+      const waText = `👀 *New Visitor* [${shortToken}]\n📄 ${page}\n${ipFlag(visitorIp)} ${visitorIp || "unknown"}`;
       for (const jid of adminJids) {
         sendWhatsAppMessage(jid, waText).catch(() => {});
       }
@@ -186,7 +200,7 @@ router.post("/message", uploadChatImages, async (req: Request, res: Response) =>
 
       const infoLines: string[] = [];
       if (displayPage) infoLines.push(`📄 ${displayPage}`);
-      if (displayIp)   infoLines.push(`🌐 ${displayIp}`);
+      if (displayIp)   infoLines.push(`${ipFlag(displayIp)} ${displayIp}`);
 
       const visitorText = contentText
         ? `👤 ${session.visitorName}: ${contentText}`

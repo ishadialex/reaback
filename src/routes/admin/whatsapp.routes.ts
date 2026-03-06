@@ -2,7 +2,8 @@ import { Router, Request, Response } from "express";
 import qrcode from "qrcode";
 import { authenticate } from "../../middleware/authenticate.js";
 import { requireRole } from "../../middleware/requireRole.js";
-import { getWhatsAppStatus } from "../../services/whatsapp.service.js";
+import { getWhatsAppStatus, startWhatsApp } from "../../services/whatsapp.service.js";
+import { clearMongoAuthState } from "../../services/waAuthStore.service.js";
 
 const router = Router();
 
@@ -68,6 +69,23 @@ router.get("/qr-image", async (_req: Request, res: Response) => {
     return res.send(buf);
   } catch {
     return res.status(500).send("Failed to generate QR image");
+  }
+});
+
+/**
+ * POST /api/admin/whatsapp/reset
+ * Clears stale MongoDB auth state and restarts WhatsApp so a fresh QR is generated.
+ * Use this to recover from "Bad MAC" / session corruption errors.
+ */
+router.post("/reset", async (_req: Request, res: Response) => {
+  try {
+    await clearMongoAuthState();
+    // Give it a moment then re-init (non-blocking — QR will appear in server logs)
+    setTimeout(() => startWhatsApp(), 1000);
+    return res.json({ success: true, message: "Auth state cleared. WhatsApp is restarting — scan the new QR from /api/admin/whatsapp/qr-image in ~5 seconds." });
+  } catch (err) {
+    console.error("📱 whatsapp/reset error:", err);
+    return res.status(500).json({ success: false, message: "Failed to reset WhatsApp auth state" });
   }
 });
 
