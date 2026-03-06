@@ -21,7 +21,9 @@ export function initSocket(httpServer: HttpServer): SocketServer {
           origin.startsWith("http://localhost") ||
           origin.startsWith("http://127.0.0.1") ||
           origin === env.FRONTEND_URL ||
-          origin.includes("ngrok")
+          origin.includes("ngrok") ||
+          origin.endsWith(".vercel.app") ||
+          origin.endsWith(".onrender.com")
         ) {
           return callback(null, true);
         }

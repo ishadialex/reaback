@@ -1,8 +1,7 @@
-import path from "path";
-import fs from "fs";
 import { prisma } from "../config/database.js";
 import { env } from "../config/env.js";
 import { emitToTicketRoom, emitToAll, emitToChatSession } from "./socket.service.js";
+import { useMongoAuthState, clearMongoAuthState } from "./waAuthStore.service.js";
 
 // ── State ──────────────────────────────────────────────────────────────────────
 
@@ -204,15 +203,14 @@ export async function startWhatsApp(): Promise<void> {
 
     // makeWASocket is a named export in Baileys v6/v7 (not a default export)
     const makeWASocket = baileys.makeWASocket ?? baileys.default?.makeWASocket ?? baileys.default;
-    const { useMultiFileAuthState, DisconnectReason, Browsers, fetchLatestBaileysVersion } = baileys;
+    const { Browsers, fetchLatestBaileysVersion } = baileys;
 
     if (typeof makeWASocket !== "function") {
       console.error("📱 Failed to load makeWASocket from Baileys. Exports:", Object.keys(baileys));
       return;
     }
 
-    const authDir = path.join(process.cwd(), "wa-auth");
-    const { state, saveCreds } = await useMultiFileAuthState(authDir);
+    const { state, saveCreds } = await useMongoAuthState();
 
     // Minimal noop logger — satisfies Baileys' pino interface without noise
     const noopLogger: any = {
@@ -267,16 +265,16 @@ export async function startWhatsApp(): Promise<void> {
         // Non-recoverable codes — hardcoded because dynamic import may not
         // resolve DisconnectReason enum values correctly in CJS context
         // 401 = loggedOut, 403 = forbidden, 405 = multideviceMismatch, 500 = badSession
-        const FATAL_CODES = new Set([401, 403, 405, 500]);
+        // 440 = connectionReplaced (another WA Web session opened — cannot recover without re-scan)
+        const FATAL_CODES = new Set([401, 403, 405, 440, 500]);
         const isFatal = FATAL_CODES.has(statusCode);
 
         console.log(`📱 WhatsApp disconnected (code ${statusCode}). Will reconnect: ${!isFatal}`);
 
         if (isFatal) {
           // Wipe the saved auth so next startWhatsApp() shows a clean QR
-          const authDir = path.join(process.cwd(), "wa-auth");
           try {
-            fs.rmSync(authDir, { recursive: true, force: true });
+            await clearMongoAuthState();
             console.log("📱 Auth state cleared — restart the server to scan a new QR code");
           } catch {}
         } else {

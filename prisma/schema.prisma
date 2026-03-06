@@ -690,6 +690,17 @@ model ChatMessage {
 }
 
 // ──────────────────────────────────────────────
+// WhatsApp Auth State (Baileys — persisted in MongoDB)
+// ──────────────────────────────────────────────
+
+model WaAuthState {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  key       String   @unique  // e.g. "creds" | "pre-key-123" | "session-abc"
+  value     String   // JSON-serialised Baileys auth data
+  updatedAt DateTime @updatedAt
+}
+
+// ──────────────────────────────────────────────
 // KYC (Know Your Customer)
 // ──────────────────────────────────────────────
 
