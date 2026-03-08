@@ -373,7 +373,8 @@ export async function servePdfFile(req: Request, res: Response) {
 
     const buffer = await cloudRes.arrayBuffer();
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `inline; filename="${document.title}.pdf"`);
+    const safeTitle = document.title.replace(/[^a-z0-9\s._-]/gi, "_");
+    res.setHeader("Content-Disposition", `inline; filename="${safeTitle}.pdf"`);
     res.setHeader("Cache-Control", "private, max-age=3600");
     return res.send(Buffer.from(buffer));
   } catch (err) {

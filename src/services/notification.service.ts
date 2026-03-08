@@ -16,6 +16,7 @@ import {
   bigAmount,
   badge,
   BRAND_PRIMARY,
+  escapeHtml,
 } from "../utils/emailTemplate.js";
 
 export enum NotificationType {
@@ -289,6 +290,10 @@ export async function notifyAdminNewTicket(
     const adminEmail = env.ADMIN_EMAIL;
     if (!adminEmail || !process.env.SMTP_USER || !process.env.SMTP_PASS) return;
 
+    const safeSubject  = escapeHtml(subject);
+    const safeMessage  = escapeHtml(message);
+    const safeUserName = escapeHtml(userName);
+
     const priorityColors: Record<string, string> = {
       low: "#6b7280",
       medium: "#3b82f6",
@@ -302,14 +307,14 @@ export async function notifyAdminNewTicket(
       ${sectionHeading("New Support Ticket")}
       ${paragraph("A user has submitted a new support request requiring your attention.")}
       ${detailTable(
-        detailRow("From", `${userName} (${userEmail})`) +
+        detailRow("From", `${safeUserName} (${userEmail})`) +
         detailRow("Ticket ID", ticketId) +
-        detailRow("Subject", subject) +
+        detailRow("Subject", safeSubject) +
         detailRow("Category", category) +
         detailRow("Priority", `<span style="color:${priorityColors[priority] || "#6b7280"}; font-weight:700; text-transform:uppercase;">${priority}</span>`) +
         detailRow("Submitted", new Date().toLocaleString())
       )}
-      ${infoBox(`<p style="margin:0 0 8px; font-size:14px; font-weight:600; color:#374151;">Message:</p><p style="margin:0; font-size:14px; color:#374151; white-space:pre-wrap;">${message}</p>`)}
+      ${infoBox(`<p style="margin:0 0 8px; font-size:14px; font-weight:600; color:#374151;">Message:</p><p style="margin:0; font-size:14px; color:#374151; white-space:pre-wrap;">${safeMessage}</p>`)}
       ${ctaButton("View Ticket", `${emailConfig.appUrl}/dashboard/support`)}
       <p style="margin:20px 0 0; font-size:13px; color:#9ca3af;">${emailConfig.appName} Admin Panel</p>
     `;
@@ -342,18 +347,22 @@ export async function notifyAdminTicketReply(
     const adminEmail = env.ADMIN_EMAIL;
     if (!adminEmail || !process.env.SMTP_USER || !process.env.SMTP_PASS) return;
 
+    const safeSubject  = escapeHtml(subject);
+    const safeMessage  = escapeHtml(message);
+    const safeUserName = escapeHtml(userName);
+
     const body = `
       ${badge("Ticket Reply", "#3b82f6")}
       <br><br>
       ${sectionHeading("Ticket Reply Received")}
       ${paragraph("A user has replied to their support ticket.")}
       ${detailTable(
-        detailRow("From", `${userName} (${userEmail})`) +
+        detailRow("From", `${safeUserName} (${userEmail})`) +
         detailRow("Ticket ID", ticketId) +
-        detailRow("Subject", subject) +
+        detailRow("Subject", safeSubject) +
         detailRow("Time", new Date().toLocaleString())
       )}
-      ${infoBox(`<p style="margin:0 0 8px; font-size:14px; font-weight:600; color:#374151;">Reply:</p><p style="margin:0; font-size:14px; color:#374151; white-space:pre-wrap;">${message}</p>`)}
+      ${infoBox(`<p style="margin:0 0 8px; font-size:14px; font-weight:600; color:#374151;">Reply:</p><p style="margin:0; font-size:14px; color:#374151; white-space:pre-wrap;">${safeMessage}</p>`)}
       ${ctaButton("View Ticket", `${emailConfig.appUrl}/dashboard/support`, "#3b82f6")}
       <p style="margin:20px 0 0; font-size:13px; color:#9ca3af;">${emailConfig.appName} Admin Panel</p>
     `;
@@ -969,18 +978,23 @@ export async function sendContactFormToAdmin(
     const adminEmail = env.ADMIN_EMAIL;
     if (!adminEmail || !process.env.SMTP_USER || !process.env.SMTP_PASS) return;
 
+    // Escape user-supplied strings before embedding in HTML
+    const safeName    = escapeHtml(name);
+    const safePhone   = escapeHtml(phone);
+    const safeMessage = escapeHtml(message);
+
     const body = `
       ${badge("New Message", BRAND_PRIMARY)}
       <br><br>
       ${sectionHeading("New Contact Form Submission")}
       ${paragraph("Someone has submitted a message through the website contact form.")}
       ${detailTable(
-        detailRow("Name", name) +
+        detailRow("Name", safeName) +
         detailRow("Email", `<a href="mailto:${email}" style="color:${BRAND_PRIMARY}; text-decoration:none;">${email}</a>`) +
-        detailRow("Phone", phone) +
+        detailRow("Phone", safePhone) +
         detailRow("Received", new Date().toLocaleString())
       )}
-      ${infoBox(`<p style="margin:0 0 8px; font-size:14px; font-weight:600; color:#374151;">Message:</p><p style="margin:0; font-size:14px; color:#374151; white-space:pre-wrap;">${message}</p>`)}
+      ${infoBox(`<p style="margin:0 0 8px; font-size:14px; font-weight:600; color:#374151;">Message:</p><p style="margin:0; font-size:14px; color:#374151; white-space:pre-wrap;">${safeMessage}</p>`)}
       ${paragraph(`You can reply directly to <a href="mailto:${email}" style="color:${BRAND_PRIMARY}; text-decoration:none;">${email}</a>.`)}
       <p style="margin:20px 0 0; font-size:13px; color:#9ca3af;">${emailConfig.appName} Contact Form</p>
     `;

@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import { env } from "./config/env.js";
 import { errorHandler } from "./middleware/errorHandler.js";
@@ -12,6 +13,11 @@ const app = express();
 // Using `true` is too permissive — it lets anyone spoof X-Forwarded-For.
 // `1` means: trust only the first upstream proxy, which is safe and correct.
 app.set("trust proxy", 1);
+
+// Security headers
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }, // allow images/PDFs served from this API
+}));
 
 // Request logging (Morgan)
 app.use(logger);

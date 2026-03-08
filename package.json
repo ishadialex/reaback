@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
+    "@types/helmet": "^0.0.48",
     "@whiskeysockets/baileys": "6.17.16",
     "axios": "^1.13.4",
     "bcrypt": "^6.0.0",
@@ -31,6 +32,7 @@
     "geoip-lite": "^2.0.0",
     "glob": "^13.0.3",
     "google-auth-library": "^10.5.0",
+    "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.1",
     "multer": "^2.0.1",

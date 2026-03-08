@@ -11,6 +11,7 @@ import {
   otpBox,
   bigAmount,
   BRAND_PRIMARY,
+  escapeHtml,
 } from "../utils/emailTemplate.js";
 
 /**
@@ -232,6 +233,7 @@ ${emailConfig.appName} Team
  * Send KYC rejected email notification
  */
 export async function sendKYCRejectedEmail(email: string, firstName: string, rejectionReason: string) {
+  const safeRejectionReason = escapeHtml(rejectionReason);
 
   const body = `
     <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin-bottom:24px;">
@@ -247,7 +249,7 @@ export async function sendKYCRejectedEmail(email: string, firstName: string, rej
     ${paragraph("We have reviewed your identity verification (KYC) submission. Unfortunately, we were unable to approve it at this time.")}
     ${dangerBox(`
       <p style="margin:0 0 8px; font-size:14px; font-weight:600; color:#b91c1c;">Reason for rejection:</p>
-      <p style="margin:0; font-size:14px; color:#7f1d1d;">${rejectionReason}</p>
+      <p style="margin:0; font-size:14px; color:#7f1d1d;">${safeRejectionReason}</p>
     `)}
     ${infoBox(`
       <p style="margin:0 0 12px; font-size:14px; font-weight:600; color:#374151;">How to resubmit:</p>

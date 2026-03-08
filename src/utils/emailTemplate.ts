@@ -1,6 +1,20 @@
 import { emailConfig } from "../config/email.js";
 import { env } from "../config/env.js";
 
+/**
+ * Escape user-supplied text before embedding it in an HTML email.
+ * Prevents XSS when attacker-controlled strings land in email clients
+ * that render HTML (e.g. Gmail web, Outlook web).
+ */
+export function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+}
+
 const BRAND_PRIMARY = "#4a6cf7";
 const BRAND_DARK = "#3b5de7";
 const BRAND_LIGHT = "#eef0ff";
