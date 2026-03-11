@@ -6,13 +6,18 @@ export async function getNotifications(req: Request, res: Response) {
   try {
     const userId = req.userId!;
 
-    const notifications = await prisma.notification.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-      take: 50,
-    });
+    const [notifications, unreadCount] = await Promise.all([
+      prisma.notification.findMany({
+        where: { userId },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+      }),
+      prisma.notification.count({
+        where: { userId, isRead: false },
+      }),
+    ]);
 
-    return success(res, notifications);
+    return success(res, { notifications, unreadCount });
   } catch (err) {
     return error(res, "Failed to fetch notifications", 500);
   }
