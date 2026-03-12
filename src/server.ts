@@ -22,6 +22,22 @@ async function startServer() {
     // Start WhatsApp integration (non-blocking — prints QR in terminal)
     startWhatsApp().catch(console.error);
 
+    // Chat session cleanup — delete sessions inactive for 12+ hours (messages cascade)
+    const CHAT_TTL_MS = 12 * 60 * 60 * 1000;
+    async function cleanupOldChatSessions() {
+      try {
+        const cutoff = new Date(Date.now() - CHAT_TTL_MS);
+        const { count } = await prisma.chatSession.deleteMany({
+          where: { updatedAt: { lt: cutoff } },
+        });
+        if (count > 0) console.log(`🧹 Deleted ${count} expired chat session(s)`);
+      } catch (err) {
+        console.error("Chat cleanup error:", err);
+      }
+    }
+    cleanupOldChatSessions(); // run once on startup
+    setInterval(cleanupOldChatSessions, 60 * 60 * 1000); // then every hour
+
     httpServer.listen(PORT, () => {
       console.log(`\n🚀 Server running on http://localhost:${PORT}`);
       console.log(`   Health check: http://localhost:${PORT}/health`);
