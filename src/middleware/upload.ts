@@ -106,14 +106,14 @@ export const uploadSingle = multer({
 export const uploadMultiple = multer({
   storage: propertyStorage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB per image
-}).array("images", 20);
+}).array("images", 40);
 
 // Upload property images + manager photo
 export const uploadPropertyWithManager = multer({
   storage: propertyStorage,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB per image
 }).fields([
-  { name: "images", maxCount: 20 },
+  { name: "images", maxCount: 40 },
   { name: "managerPhoto", maxCount: 1 },
 ]);
 

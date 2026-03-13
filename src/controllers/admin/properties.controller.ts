@@ -289,7 +289,7 @@ export async function create(req: Request, res: Response) {
 
     // Extract property images
     const propertyImages = files?.images || [];
-    if (propertyImages.length > 20) {
+    if (propertyImages.length > 40) {
       return error(res, "Maximum 20 property images allowed", 400);
     }
 
@@ -348,7 +348,7 @@ export async function update(req: Request, res: Response) {
 
     // Append new property images to existing ones (don't replace)
     if (files?.images && files.images.length > 0) {
-      if (files.images.length > 20) {
+      if (files.images.length > 40) {
         return error(res, "Maximum 20 property images allowed", 400);
       }
       // Cloudinary returns URLs in file.path — merge with current images

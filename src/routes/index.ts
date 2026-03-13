@@ -37,6 +37,7 @@ import adminForumRoutes from "./admin/forum.routes.js";
 import adminReviewsRoutes from "./admin/reviews.routes.js";
 import adminWhatsappRoutes from "./admin/whatsapp.routes.js";
 import adminChatRoutes from "./admin/chat.routes.js";
+import adminZillowRoutes from "./admin/zillow.routes.js";
 import documentsRoutes from "./documents.routes.js";
 import kycRoutes from "./kyc.routes.js";
 import forumRoutes from "./forum.routes.js";
@@ -94,5 +95,6 @@ router.use("/admin/forum", adminForumRoutes);
 router.use("/admin/reviews", adminReviewsRoutes);
 router.use("/admin/whatsapp", adminWhatsappRoutes);
 router.use("/admin/chat", adminChatRoutes);
+router.use("/admin/zillow", adminZillowRoutes);
 
 export default router;

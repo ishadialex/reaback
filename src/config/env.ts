@@ -41,6 +41,9 @@ const envSchema = z.object({
   PDF_TOKEN_EXPIRY: z.string().default("1h"),
   // WhatsApp admin JID (e.g. "2348012345678@s.whatsapp.net") — replies here are routed to chat widget
   ADMIN_WA_JID: z.string().optional(),
+  // ScraperAPI key — used to bypass Zillow bot detection (free: 1000 req/month)
+  // Get one at https://www.scraperapi.com
+  SCRAPER_API_KEY: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);
