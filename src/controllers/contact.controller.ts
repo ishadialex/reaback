@@ -9,7 +9,7 @@ import { env } from "../config/env.js";
  */
 export async function submitContactForm(req: Request, res: Response) {
   try {
-    const { name, email, phone, message } = req.body;
+    const { name, email, phone, message } = req.body;                                                                    
 
     // Validate required fields
     if (!name || !email || !message) {
@@ -53,7 +53,8 @@ export async function submitContactForm(req: Request, res: Response) {
         `📞 *Phone:* ${trimmedPhone}\n\n` +
         `💬 *Message:*\n${trimmedMessage}`;
       for (const jid of adminJids) {
-        sendWhatsAppMessage(jid, waText).catch((err) => console.error("Error sending contact WA:", err));
+        sendWhatsAppMessage(jid, waText)
+        .catch((err) => console.error("Error sending contact WA:", err));
       }
     });
 
