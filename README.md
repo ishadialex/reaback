@@ -1,6 +1,6 @@
-# Alvarado Investment Backend API
+# Real estate Investment Backend API
 
-Express.js + TypeScript + MongoDB backend for the Alvarado Investment platform.
+Express.js + TypeScript + MongoDB backend for the Real Estate Investment platform.
 
 ## 🚀 Quick Start
 
@@ -44,10 +44,10 @@ SMTP_PORT=587
 SMTP_SECURE="false"
 SMTP_USER="your-email@gmail.com"
 SMTP_PASS="your-app-password"
-EMAIL_FROM="Alvarado Investment <noreply@alvarado.com>"
-APP_NAME="Alvarado Investment"
+EMAIL_FROM="Real Estate Investment <noreply@Real Estate.com>"
+APP_NAME="Real Estate Investment"
 APP_URL="http://localhost:3000"
-ADMIN_EMAIL="admin@alvarado.com"
+ADMIN_EMAIL="admin@Real Estate.com"
 
 # Optional - IP Geolocation (free tier: 50k/month)
 IPINFO_TOKEN=""
@@ -163,7 +163,7 @@ npm run lint     # Run ESLint
 
 ### Heroku
 ```bash
-heroku create alvarado-backend
+heroku create Real Estate-backend
 heroku config:set DATABASE_URL="..."
 git push heroku main
 ```
@@ -171,7 +171,7 @@ git push heroku main
 ## 📝 Notes
 
 - Default port: 4001
-- Demo user: `demo@alvarado.com` / `Demo1234!`
+- Demo user: `demo@Real Estate.com` / `Demo1234!`
 - MongoDB indexes created automatically on first run
 - File uploads stored in `uploads/` directory
 - Logs include request timing, size, and user ID
@@ -194,4 +194,4 @@ NEXT_PUBLIC_API_URL=https://your-backend-url.com
 
 ## 📄 License
 
-Private - Alvarado Investment Platform
+Private - Real Estate Investment Platform
